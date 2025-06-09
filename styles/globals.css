@@ -1,0 +1,51 @@
+/* styles/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* --------------  UTILITIES PERSONALIZZATE -------------- */
+@layer utilities {
+  /* campi di input usati in tutti i form */
+  .input-field {
+    @apply w-full rounded-full bg-cream px-4 py-2
+           text-secondary placeholder-secondary/70
+           focus:outline-none;
+  }
+
+  /* larghezza massima colonna form (Affiliazione) */
+  .form-col {
+    @apply w-full max-w-lg;
+  }
+
+  /* • Titoli tipo breadcrumb (es. "• Affiliazione") */
+  .bullet-title::before {
+    content: '•';
+    margin-right: .5rem;
+  }
+}
+
+@media (min-width: 768px){
+  .hero-card{ transform: translateY(3rem); }
+}
+
+/* --------------  COLORI DI BASE -------------- */
+:root {
+  --primary:   #12A969;
+  --secondary: #024230;
+  --cream:     #fff9e9;
+  --paper:     #e9ebe7;
+  --night:     #003039;
+}
+
+.bg-primary   { background-color: var(--primary); }
+.text-primary { color: var(--primary); }
+
+.bg-secondary   { background-color: var(--secondary); }
+.text-secondary { color: var(--secondary); }
+
+.bg-cream { background-color: var(--cream); }
+.bg-paper { background-color: var(--paper); }
+.bg-night { background-color: var(--night); }
+
+html { scroll-behavior: smooth; }
+
