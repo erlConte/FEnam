@@ -16,12 +16,8 @@ export default function ContactNewsletter() {
             <input placeholder="Cognome"   className="input-field" />
             <input placeholder="Telefono"  className="input-field md:col-span-2" />
             <input placeholder="Email *"   className="input-field md:col-span-2" />
+            <input placeholder="Messaggio" className="input-field md:col-span-2" />
           </div>
-          <textarea
-            placeholder="Messaggio"
-            rows={3}
-            className="input-field h-32"
-          />
           <button className="rounded-full border px-8 py-2">Inviare</button>
         </form>
 

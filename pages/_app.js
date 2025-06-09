@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
+
 export default function MyApp({ Component, pageProps }) {
   const router = useRouter()
 

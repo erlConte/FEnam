@@ -1,34 +1,9 @@
-/* styles/globals.css */
+/* === Tailwind base === */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* --------------  UTILITIES PERSONALIZZATE -------------- */
-@layer utilities {
-  /* campi di input usati in tutti i form */
-  .input-field {
-    @apply w-full rounded-full bg-cream px-4 py-2
-           text-secondary placeholder-secondary/70
-           focus:outline-none;
-  }
-
-  /* larghezza massima colonna form (Affiliazione) */
-  .form-col {
-    @apply w-full max-w-lg;
-  }
-
-  /* • Titoli tipo breadcrumb (es. "• Affiliazione") */
-  .bullet-title::before {
-    content: '•';
-    margin-right: .5rem;
-  }
-}
-
-@media (min-width: 768px){
-  .hero-card{ transform: translateY(3rem); }
-}
-
-/* --------------  COLORI DI BASE -------------- */
+/* ---------- PALETTE ---------- */
 :root {
   --primary:   #12A969;
   --secondary: #024230;
@@ -49,3 +24,23 @@
 
 html { scroll-behavior: smooth; }
 
+/* ---------- UTILITIES ---------- */
+@layer utilities {
+  /* input usato in tutti i form */
+  .input-field {
+    @apply w-full rounded-full bg-cream px-4 py-2
+           text-secondary placeholder-secondary/70
+           focus:outline-none;
+  }
+  /* titoletti con • */
+  .bullet-title::before { content:'•'; margin-right:.5rem; }
+}
+
+/* ---------- COMPONENTI ---------- */
+@layer components {
+  /* card FENAM riutilizzabile */
+  .fenam-card {
+    @apply relative rounded-[2rem] bg-cream/90 p-8
+           backdrop-blur shadow-lg text-secondary;
+  }
+}

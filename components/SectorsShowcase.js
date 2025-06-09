@@ -44,9 +44,15 @@ function Pill({ text }) {
         </span>
       </div>
 
-      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-secondary bg-primary/20 text-secondary">
-        <RotateCcw size={16} />
-      </span>
+      <Image
+  src="/img/FENAM-ICON.png"
+  alt=""
+  width={32}
+  height={32}
+  className="flex h-7 w-7 items-center justify-center rounded-full border border-secondary bg-primary/20 text-secondary"
+  priority
+/>
+      
     </div>
   )
 }

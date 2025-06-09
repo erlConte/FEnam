@@ -1,21 +1,25 @@
 import Head from 'next/head'
 import Hero from '../components/Hero'
 import SectorsShowcase from '../components/SectorsShowcase'
-import ValuesCarousel from '../components/ValuesCarousel'
-import ContactNewsletter from '../components/ContactNewsletter'
+import ValoriSection from '../components/ValoriSection'
 import ProjectsSection from '../components/ProjectsSection'
+import EventsSection   from '../components/EventsSection'
+import ContactNewsletter from '../components/ContactNewsletter'
+import MissionSection from '../components/MissionSection'
 
 export default function Home() {
   return (
     <>
       <Head><title>FENAM — Federazione Nazionale Associazioni Multiculturali</title></Head>
-
+      
       <Hero />
-      <SectorsShowcase />     {/* id="settori" */}
-      <ValuesCarousel />      {/* id="valori" */}
-      <ProjectsSection />   
-      <ContactNewsletter />   {/* id="contatti" */}
-        
+      <MissionSection/>
+      <SectorsShowcase />
+      
+      <ValoriSection />
+      <ProjectsSection />
+      <EventsSection /> 
+      <ContactNewsletter />
     </>
   )
 }

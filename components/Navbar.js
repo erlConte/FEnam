@@ -6,10 +6,10 @@ import { Menu, X } from 'lucide-react'
 import { useRouter } from 'next/router'
 
 const nav = [
-  { href: '#chi-siamo', label: 'Chi Siamo' },
-  { href: '#settori', label: 'I Nostri Settori' },
-  { href: '#progetti', label: 'Progetti' },
-  { href: '#eventi', label: 'Eventi' },
+  { href: '/about',     label: 'Chi Siamo' },
+  { href: '/#settori',   label: 'I Nostri Settori' },
+  { href: '/#progetti',  label: 'Progetti' },
+  { href: '/#eventi',    label: 'Eventi' },
   { href: '/affiliazione', label: 'Affiliazione' },
   { href: '/blog', label: 'Blog' },
 ]
@@ -54,7 +54,7 @@ export default function Navbar() {
               <NavLink
                 {...l}
                 close={() => {}}
-                active={router.asPath === l.href || router.asPath.startsWith(l.href)}
+                active={router.asPath === l.href}
               />
             </li>
           ))}
@@ -90,7 +90,7 @@ export default function Navbar() {
               key={l.href}
               {...l}
               close={() => setOpen(false)}
-              active={router.asPath === l.href || router.asPath.startsWith(l.href)}
+              active={router.pathname === l.href || router.asPath === l.href}
             />
           ))}
 
