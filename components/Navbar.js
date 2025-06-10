@@ -41,8 +41,8 @@ export default function Navbar() {
           <Image
             src="/img/LOGO-FENAM-14.png"
             alt="FENAM"
-            width={120}
-            height={40}
+            width={240}
+            height={80}
             priority
           />
         </Link>
@@ -60,7 +60,7 @@ export default function Navbar() {
           ))}
           <li>
             <Link
-              href="#contatti"
+              href="/#contatti"
               className="rounded-full bg-primary px-4 py-1 text-sm font-semibold text-white shadow hover:bg-primary/90"
             >
               ● Contattaci

@@ -6,7 +6,7 @@ export default function Hero() {
   return (
     <header className="relative isolate bg-paper">
       {/* ---------- headline ---------- */}
-      <div className="mx-auto max-w-7xl px-6 pb-16 pt-32 md:pt-40">
+      <div className="mx-auto max-w-7xl px-6 pb-16 pt-32 md:pt-20">
         <h1 className="text-4xl md:text-6xl font-bold leading-tight text-secondary">
           Creiamo&nbsp;
           <em className="not-italic italic font-normal text-primary">ponti culturali</em><br />
@@ -17,7 +17,14 @@ export default function Hero() {
           <span className="rounded-full border border-secondary px-4 py-1 text-xs">
             Federazione Nazionale Associazioni Multiculturali
           </span>
-          <span className="h-7 w-7 rounded-full border border-secondary bg-primary/20" />
+          <Image
+            src="/img/FENAM-ICON.png"
+            alt=""
+            width={32}
+            height={32}
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-secondary bg-primary/20 text-secondary"
+            priority
+          />
         </div>
       </div>
 

@@ -6,7 +6,7 @@ export default function BlogCard({ post }) {
     <article className="overflow-hidden rounded-2xl bg-white shadow transition hover:shadow-lg">
       <Link href={`/blog/${post.slug}`}>
         <Image
-          src={`/img/blog/${post.cover}`}
+          src={post.cover}
           alt=""
           width={600}
           height={350}

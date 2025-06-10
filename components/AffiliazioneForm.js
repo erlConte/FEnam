@@ -4,13 +4,15 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 
+// Schema di validazione con Zod
 const schema = z.object({
   nome:     z.string().min(2, 'Obbligatorio'),
   cognome:  z.string().min(2, 'Obbligatorio'),
   email:    z.string().email('Email non valida'),
   telefono: z.string().min(5, 'Obbligatorio'),
-  privacy:  z.literal(true, { errorMap: () => ({ message: 'Richiesto' }) }),
+  privacy:  z.boolean().refine(v => v, { message: 'Richiesto' }),
 })
 
 export default function AffiliazioneForm() {
@@ -24,18 +26,28 @@ export default function AffiliazioneForm() {
 
   async function onSubmit(values) {
     setLoading(true)
-    const res = await fetch('/api/affiliazione', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(values),
-    })
-    const data = await res.json()
-    if (data.url) window.location.href = data.url
-    else if (data.ok) {
-      toast.success('Richiesta inviata!')
-      reset()
-    } else toast.error(data.error || 'Errore')
-    setLoading(false)
+    try {
+      const res = await fetch('/api/affiliazione', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      })
+      const data = await res.json()
+
+      if (data.url) {
+        // Redirect a Stripe Checkout
+        window.location.href = data.url
+      } else if (data.ok) {
+        toast.success('Richiesta inviata!')
+        reset()
+      } else {
+        toast.error(data.error || 'Errore')
+      }
+    } catch (err) {
+      toast.error('Errore di rete, riprova più tardi')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -45,11 +57,12 @@ export default function AffiliazioneForm() {
     >
       <h2 className="text-3xl font-bold">Carta di Affiliazione</h2>
 
-      {/* campi base */}
+      {/* Campi dinamici */}
       {['nome', 'cognome', 'email', 'telefono'].map((field) => (
         <div key={field}>
           <label className="mb-1 block text-sm capitalize">
-            {field}{field === 'email' && ' *'}
+            {field}
+            {field === 'email' && ' *'}
           </label>
           <input
             {...register(field)}
@@ -62,15 +75,16 @@ export default function AffiliazioneForm() {
         </div>
       ))}
 
-      {/* checkbox privacy */}
+      {/* Checkbox privacy */}
       <label className="flex items-center gap-2 text-xs">
         <input type="checkbox" {...register('privacy')} className="h-4 w-4" />
-        Accetto termini &amp; privacy
+        Accetto termini &amp; privacy *
       </label>
       {errors.privacy && (
         <p className="mt-1 text-xs text-red-600">{errors.privacy.message}</p>
       )}
 
+      {/* Pulsante di invio */}
       <button
         type="submit"
         disabled={loading}
@@ -79,7 +93,7 @@ export default function AffiliazioneForm() {
         {loading ? 'Invio…' : 'Acquista ora'}
       </button>
 
-      <p className="text-center text-xs">Carta di abbonamento €85/anno</p>
+      <p className="text-center text-xs">Carta di affiliazione €85/anno</p>
     </form>
   )
 }

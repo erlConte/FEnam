@@ -2,7 +2,11 @@ import Image from 'next/image'
 
 export default function Card({ badge, icon, title, className = '', children }) {
   return (
-    <article className={`fenam-card ${className}`}>
+    <article
+      className={
+        `relative overflow-hidden rounded-2xl p-6 bg-cream shadow transition hover:shadow-lg ${className}`
+      }
+    >
       {badge && (
         <div className="mb-6 flex items-center gap-2">
           <span className="rounded-full border border-secondary px-4 py-1 text-xs">
@@ -19,11 +23,15 @@ export default function Card({ badge, icon, title, className = '', children }) {
           width={32}
           height={32}
           priority
-          className="absolute -right-0 -top-0 select-none"
+          className="absolute top-4 right-4 select-none"
         />
       )}
 
-      {title && <h3 className="text-4xl font-extrabold leading-snug">{title}</h3>}
+      {title && (
+        <h3 className="text-4xl font-extrabold leading-snug text-secondary mb-4">
+          {title}
+        </h3>
+      )}
       {children}
     </article>
   )

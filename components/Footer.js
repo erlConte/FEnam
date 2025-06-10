@@ -24,7 +24,7 @@ export default function Footer() {
       </div>
 
       <p className="text-xs">
-        © 2025 FENAM&nbsp;— Federazione Nazionale Mercati
+        © 2025 FENAM&nbsp;— Federazione Nazionale di Associazioni Multiculturali
       </p>
     </footer>
   )

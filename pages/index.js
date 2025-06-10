@@ -11,11 +11,9 @@ export default function Home() {
   return (
     <>
       <Head><title>FENAM — Federazione Nazionale Associazioni Multiculturali</title></Head>
-      
       <Hero />
       <MissionSection/>
       <SectorsShowcase />
-      
       <ValoriSection />
       <ProjectsSection />
       <EventsSection /> 

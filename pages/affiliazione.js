@@ -24,7 +24,7 @@ export default function Affiliazione() {
               Scopri i Vantaggi Esclusivi!
             </h1>
             <p className="max-w-prose text-secondary/90">
-            on perdere l'opportunità di accedere a un universo di vantaggi pensati per imprese, associazioni e individui come te. Con una piccola quota annuale, potrai godere di una serie di servizi esclusivi che arricchiranno la tua vita quotidiana.
+            Non perdere l'opportunità di accedere a un universo di vantaggi pensati per imprese, associazioni e individui come te. Con una piccola quota annuale, potrai godere di una serie di servizi esclusivi che arricchiranno la tua vita quotidiana.
  
  Immagina di avere una polizza assicurativa gratuita che ti offre serenità, assistenza tecnica sempre a disposizione per ogni tua necessità, e tariffe vantaggiose su Luce, Gas e Internet, così da risparmiare senza sacrificare la qualità.
  Inoltre, partecipa a eventi di networking esclusivi per ampliare la tua rete e scambiare idee con professionisti del tuo settore. Approfitta di consulenze gratuite per affrontare le tue sfide e ricevi sconti su pratiche burocratiche, semplificando così la tua vita.

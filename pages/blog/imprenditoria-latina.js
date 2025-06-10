@@ -12,7 +12,7 @@ export default function BlogPost() {
   const post = {
     id: slug,
     title: "L'Imprenditoria Latina in Italia: Un Motore di Crescita Economica e Culturale",
-    author: 'FENAM',
+    author: 'Natalia Beltran Gomez',
     date: '16 marzo 2025',
     readTime: 2,
     excerpt:
@@ -29,7 +29,7 @@ export default function BlogPost() {
       {
         type: 'paragraph',
         text:
-          'L\'imprenditoria latina in Italia è un motore di crescita economica. Secondo il rapporto "Imprenditoria immigrata in Italia" della Fondazione Leone Moressa (2023), le imprese guidate da cittadini latinoamericani sono in costante aumento, con una particolare concentrazione nei settori del commercio, della ristorazione, dei servizi alla persona e dell\'edilizia. Queste attività generano un importante indotto economico, contribuendo al PIL e al gettito fiscale. “L\'imprenditoria immigrata, e in particolare quella latina, rappresenta una risorsa fondamentale per l\'economia italiana, in grado di creare valore aggiunto e di stimolare la competitività” (Fondazione Leone Moressa, 2023).'
+          'L\'imprenditoria latina in Italia è un motore di crescita economica. Secondo il rapporto "Imprenditoria immigrata in Italia" della Fondazione Leone Moressa (2023), le imprese guidate da cittadini latinoamericani sono in costante aumento, con una particolare concentrazione nei settori del commercio, della ristorazione, dei servizi alla persona e dell\'edilizia. Queste attività generano un importante indotto economico, contribuendo al PIL e al gettito fiscale. L\'imprenditoria immigrata, e in particolare quella latina, rappresenta una risorsa fondamentale per l\'economia italiana, in grado di creare valore aggiunto e di stimolare la competitività" (Fondazione Leone Moressa, 2023).'
       },
       {
         type: 'heading',
@@ -38,7 +38,7 @@ export default function BlogPost() {
       {
         type: 'paragraph',
         text:
-          'Oltre al contributo economico, gli imprenditori latinoamericani svolgono un ruolo cruciale nell’arricchire il tessuto sociale e culturale dell’Italia. Portano con sé tradizioni, valori e competenze uniche, che si riflettono nelle loro attività e nelle interazioni con la comunità locale. Ristoranti, negozi di prodotti tipici, centri culturali e associazioni sono solo alcuni esempi di come l’imprenditoria latina stia contribuendo a promuovere la diversità culturale e a creare ponti tra l’Italia e l’America Latina. “L’integrazione degli immigrati passa anche attraverso l’imprenditoria, che favorisce lo scambio culturale e la creazione di reti sociali” (Ministero del Lavoro e delle Politiche Sociali, 2022).'
+          'Oltre al contributo economico, gli imprenditori latinoamericani svolgono un ruolo cruciale nell\'arricchire il tessuto sociale e culturale dell\'Italia. Portano con sé tradizioni, valori e competenze uniche, che si riflettono nelle loro attività e nelle interazioni con la comunità locale. Ristoranti, negozi di prodotti tipici, centri culturali e associazioni sono solo alcuni esempi di come l\'imprenditoria latina stia contribuendo a promuovere la diversità culturale e a creare ponti tra l\'Italia e l\'America Latina. L\'integrazione degli immigrati passa anche attraverso l\'imprenditoria, che favorisce lo scambio culturale e la creazione di reti sociali (Ministero del Lavoro e delle Politiche Sociali, 2022). '
       },
       {
         type: 'heading',
@@ -47,7 +47,7 @@ export default function BlogPost() {
       {
         type: 'paragraph',
         text:
-          'Nonostante i successi, gli imprenditori latinoamericani in Italia affrontano ancora diverse sfide, tra cui l’accesso al credito, la burocrazia e la difficoltà di riconoscimento dei titoli di studio. Tuttavia, il loro spirito di resilienza e la loro capacità di adattamento li rendono protagonisti di una storia di successo, che offre anche delle opportunità di crescita. Il governo e le istituzioni locali stanno riconoscendo sempre più l’importanza di sostenere l’imprenditoria immigrata, attraverso programmi di formazione, finanziamenti agevolati e servizi di consulenza.'
+          'Nonostante i successi, gli imprenditori latinoamericani in Italia affrontano ancora diverse sfide, tra cui l\'accesso al credito, la burocrazia e la difficoltà di riconoscimento dei titoli di studio. Tuttavia, il loro spirito di resilienza e la loro capacità di adattamento li rendono protagonisti di una storia di successo, che offre anche delle opportunità di crescita. Il governo e le istituzioni locali stanno riconoscendo sempre più l\'importanza di sostenere l\'imprenditoria immigrata, attraverso programmi di formazione, finanziamenti agevolati e servizi di consulenza.'
       },
       {
         type: 'heading',
@@ -56,7 +56,7 @@ export default function BlogPost() {
       {
         type: 'paragraph',
         text:
-          'L’imprenditoria latina in Italia è una realtà dinamica e in crescita, che sta contribuendo in modo significativo all’economia e alla società italiana. Il loro spirito di iniziativa, la loro creatività e la loro ricchezza culturale rappresentano un valore aggiunto per il paese, che può trarre vantaggio dalla diversità e dall’apertura verso il mondo.'
+          'L\'imprenditoria latina in Italia è una realtà dinamica e in crescita, che sta contribuendo in modo significativo all\'economia e alla società italiana. Il loro spirito di iniziativa, la loro creatività e la loro ricchezza culturale rappresentano un valore aggiunto per il paese, che può trarre vantaggio dalla diversità e dall\'apertura verso il mondo. '
       }
     ],
     bibliography: [
@@ -65,7 +65,7 @@ export default function BlogPost() {
       'ISTAT (Istituto Nazionale di Statistica). "Dati sull’imprenditoria straniera in Italia".'
     ],
     quote:
-      '“L\'imprenditoria immigrata, e in particolare quella latina, rappresenta una risorsa fondamentale per l\'economia italiana, in grado di creare valore aggiunto e di stimolare la competitività” (Fondazione Leone Moressa, 2023).',
+      ' "L\'imprenditoria immigrata, e in particolare quella latina, rappresenta una risorsa fondamentale per l\'economia italiana, in grado di creare valore aggiunto e di stimolare la competitività" (Fondazione Leone Moressa, 2023).',
     views: 11,
     commentsCount: 0
   }
@@ -116,16 +116,26 @@ export default function BlogPost() {
         </header>
 
         {/* ─── CONTENUTO ─────────────────────────────────────────────────────── */}
-        <section className="prose prose-lg prose-secondary mt-12">
+        <section className="mt-12 space-y-8">
           {post.content.map((block, i) => {
             if (block.type === 'heading')
-              return <h2 key={i}>{block.text}</h2>
+              return (
+                <h2
+                  key={i}
+                  className="text-lg font-bold text-secondary leading-snug"
+                >
+                  {block.text}
+                </h2>
+              )
             if (block.type === 'paragraph')
-              return <p key={i}>{block.text}</p>
+              return (
+                <p key={i} className="text-lg text-secondary">
+                  {block.text}
+                </p>
+              )
             return null
           })}
         </section>
-
         {/* ─── FINE ARTICOLO ─────────────────────────────────────────────────── */}
         <hr className="my-16 border-secondary/30" />
 

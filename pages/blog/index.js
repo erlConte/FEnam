@@ -7,7 +7,7 @@ const posts = [
     title:
       "L'Imprenditoria Latina in Italia: Un Motore di Crescita Economica e Culturale",
     date: '16 Marzo 2025',
-    cover: 'imprenditoria-latina.jpg',
+    cover: '/img/imprenditoria-latina.jpg',
     excerpt:
       'Negli ultimi decenni l’Italia ha visto crescere il contributo degli imprenditori latino-americani, ridefinendo mercati e cultura…',
   },
