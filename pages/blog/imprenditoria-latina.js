@@ -1,8 +1,8 @@
-// pages/blog/[slug].js
+// pages/blog/imprenditoria-latina.js
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import Image from 'next/image'
-import { Facebook, Twitter, Linkedin, Link as LinkIcon, Heart } from 'lucide-react'
+import Link from 'next/link'
 
 export default function BlogPost() {
   const router = useRouter()
@@ -157,32 +157,13 @@ export default function BlogPost() {
               {post.quote}
             </blockquote>
           </div>
-
+          <hr className="my-16 border-secondary/30" />
           {/* Condividi & Statistiche */}
-          <div className="flex items-center justify-between border-t border-secondary/30 pt-8 text-secondary/70">
-            <div className="flex gap-4">
-              <Facebook size={20} className="cursor-pointer hover:text-primary"/>
-              <Twitter size={20} className="cursor-pointer hover:text-primary"/>
-              <Linkedin size={20} className="cursor-pointer hover:text-primary"/>
-              <LinkIcon size={20} className="cursor-pointer hover:text-primary"/>
-            </div>
-            <div className="flex items-center gap-8">
-              <span>{post.views} visualizzazioni</span>
-              <span>{post.commentsCount} commenti</span>
-              <Heart size={20} className="cursor-pointer hover:text-red-500"/>
-            </div>
-          </div>
+          <div></div>
+          <Link href="/blog" className="text-secondary hover:underline">
+            ← Torna agli eventi
+          </Link>
         </footer>
-
-        {/* ─── COMMENTI ─────────────────────────────────────────────────────── */}
-        <section className="mt-16">
-          <h2 className="text-xl font-semibold text-secondary mb-6">Commenti</h2>
-          <textarea
-            placeholder="Scrivi un commento..."
-            className="w-full rounded-lg border border-secondary/30 p-3 text-secondary focus:ring-primary focus:border-primary"
-            rows={4}
-          />
-        </section>
       </article>
     </>
   )

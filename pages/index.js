@@ -3,7 +3,6 @@ import Hero from '../components/Hero'
 import SectorsShowcase from '../components/SectorsShowcase'
 import ValoriSection from '../components/ValoriSection'
 import ProjectsSection from '../components/ProjectsSection'
-import EventsSection   from '../components/EventsSection'
 import ContactNewsletter from '../components/ContactNewsletter'
 import MissionSection from '../components/MissionSection'
 
@@ -16,7 +15,6 @@ export default function Home() {
       <SectorsShowcase />
       <ValoriSection />
       <ProjectsSection />
-      <EventsSection /> 
       <ContactNewsletter />
     </>
   )

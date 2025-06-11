@@ -7,7 +7,8 @@ export default function Footer() {
         Termini e condizioni&nbsp;|&nbsp;Informativa sulla privacy&nbsp;|&nbsp;
         Dichiarazione di accessibilità
       </p>
-
+      <p className="mb-3">| C.F. 96628930586</p>
+      
       <div className="mb-3 flex justify-center gap-4">
         <a href="#" aria-label="LinkedIn" className="hover:text-primary">
           <Linkedin size={20} />
@@ -22,9 +23,9 @@ export default function Footer() {
           <Youtube size={20} />
         </a>
       </div>
-
+      
       <p className="text-xs">
-        © 2025 FENAM&nbsp;— Federazione Nazionale di Associazioni Multiculturali
+        © 2025 FENAM&nbsp;— Federazione Nazionale Associazioni Multiculturali
       </p>
     </footer>
   )

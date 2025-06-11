@@ -109,13 +109,12 @@ export default function ContactNewsletter() {
           </form>
 
           {/* Contact Card desktop */}
-          <Card className="hidden lg:block bg-paper text-night lg:row-start-2 lg:col-start-1">
+          <Card className="hidden lg:block bg-paper text-night lg:row-start-2 lg:col-start-1 max-w-sm">
             <h3 className="text-2xl font-semibold mb-2">
-              Contattaci per richieste o collaborazioni
+              Contattaci per richieste <br/>o collaborazioni
             </h3>
             <p>info@fenam.it</p>
-            <p>Via Antonio Gramsci, 20. Roma.</p>
-            <p>| C.F. 96628930586</p>
+            <p>Via del Plebiscito 112 Roma - 00186</p>
           </Card>
 
           {/* Contact Card mobile */}
@@ -124,7 +123,7 @@ export default function ContactNewsletter() {
               Contattaci per richieste o collaborazioni
             </h3>
             <p>info@fenam.it</p>
-            <p>Via Antonio Gramsci, 20. Roma.</p>
+            <p>Via del Plebiscito 112 Roma - 00186</p>
           </Card>
 
           {/* Newsletter */}

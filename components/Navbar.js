@@ -9,7 +9,7 @@ const nav = [
   { href: '/about',     label: 'Chi Siamo' },
   { href: '/#settori',   label: 'I Nostri Settori' },
   { href: '/#progetti',  label: 'Progetti' },
-  { href: '/#eventi',    label: 'Eventi' },
+  { href: '/eventi',    label: 'Eventi' },
   { href: '/affiliazione', label: 'Affiliazione' },
   { href: '/blog', label: 'Blog' },
 ]

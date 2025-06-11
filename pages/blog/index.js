@@ -7,11 +7,18 @@ const posts = [
     title:
       "L'Imprenditoria Latina in Italia: Un Motore di Crescita Economica e Culturale",
     date: '16 Marzo 2025',
-    cover: '/img/imprenditoria-latina.jpg',
+    cover: '/img/blog/imprenditoria-latina.jpg',
     excerpt:
       'Negli ultimi decenni l’Italia ha visto crescere il contributo degli imprenditori latino-americani, ridefinendo mercati e cultura…',
   },
-  // aggiungi altri post qui
+  {
+    slug: 'abbracciando-diversita',
+    title: 'Abbracciando la Diversità: il futuro della moda',
+    date: '10 Giugno 2025',
+    cover: '/img/blog/pozzanghera.jpg',
+    excerpt:
+      'La moda è sempre stata un riflesso della società, un mezzo per esprimere la nostra identità e la nostra visione del mondo...',
+  },
 ]
 
 export default function Blog() {
