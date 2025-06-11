@@ -1,0 +1,29 @@
+// prisma/schema.prisma
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model NewsletterSubscription {
+  id         String   @id @default(cuid())
+  email      String
+  token      String   @unique
+  expiresAt  DateTime
+  confirmed  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model ContactMessage {
+  id         String   @id @default(cuid())
+  nome       String
+  cognome    String
+  telefono   String?
+  email      String
+  messaggio  String
+  createdAt  DateTime @default(now())
+}

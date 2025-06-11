@@ -1,65 +1,86 @@
 // pages/api/contact.js
+import { z } from 'zod'
+import { PrismaClient } from '@prisma/client'
 import nodemailer from 'nodemailer'
+
+const prisma = new PrismaClient()
+
+// 1) Schema di validazione
+const contactSchema = z.object({
+  nome:      z.string().min(1, 'Nome obbligatorio'),
+  cognome:   z.string().min(1, 'Cognome obbligatorio'),
+  telefono:  z.string().min(5, 'Telefono non valido').optional(),
+  email:     z.string().email('Email non valida'),
+  messaggio: z.string().min(10, 'Messaggio troppo corto'),
+})
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
-  const { nome, cognome, telefono, email, messaggio } = req.body
-
-  if (!nome || !cognome || !email || !messaggio) {
-    return res.status(400).json({ error: 'Campi mancanti' })
+    return res.status(405).json({ ok: false, error: 'Metodo non consentito' })
   }
 
-  // Se hai definito SMTP_HOST in env, lo usi, altrimenti crei un test account
-  const transporter = process.env.SMTP_HOST
-    ? nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: +process.env.SMTP_PORT,
+  // 2) Validazione server-side
+  const parse = contactSchema.safeParse(req.body)
+  if (!parse.success) {
+    return res.status(400).json({ ok: false, error: parse.error.issues[0].message })
+  }
+  const { nome, cognome, telefono, email, messaggio } = parse.data
+
+  try {
+    // 3) Salvo SEMPRE in database
+    await prisma.contactMessage.create({
+      data: {
+        nome,
+        cognome,
+        telefono: telefono || null,
+        email,
+        messaggio,
+      },
+    })
+  } catch (dbErr) {
+    console.error('❌ Errore DB contactMessage:', dbErr)
+    return res.status(500).json({ ok: false, error: 'Errore salvataggio in database' })
+  }
+
+  // 4) Se hai le credenziali SMTP, invia la mail; altrimenti skip
+  if (
+    process.env.SMTP_HOST &&
+    process.env.SMTP_USER &&
+    process.env.SMTP_PASS &&
+    process.env.SMTP_PORT
+  ) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host:   process.env.SMTP_HOST,
+        port:  +process.env.SMTP_PORT,
         secure: process.env.SMTP_SECURE === 'true',
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
         },
       })
-    : await (async () => {
-        const testAcc = await nodemailer.createTestAccount()
-        return nodemailer.createTransport({
-          host: testAcc.smtp.host,
-          port: testAcc.smtp.port,
-          secure: testAcc.smtp.secure,
-          auth: {
-            user: testAcc.user,
-            pass: testAcc.pass,
-          },
-        })
-      })()
 
-  try {
-    const info = await transporter.sendMail({
-      from: process.env.SMTP_USER || `"Test" <${(await transporter).options.auth.user}>`,
-      to: process.env.CONTACT_EMAIL || 'test@ethereal.email',
-      subject: `Richiesta da ${nome} ${cognome}`,
-      text: `
+      await transporter.sendMail({
+        from:    `"${nome} ${cognome}" <${process.env.SMTP_USER}>`,
+        to:      process.env.CONTACT_EMAIL,
+        subject: `Richiesta da ${nome} ${cognome}`,
+        text: `
 Nome: ${nome}
 Cognome: ${cognome}
-Telefono: ${telefono}
+Telefono: ${telefono || '-'}
 Email: ${email}
 
 ${messaggio}
-      `,
-    })
-
-    // Se stai usando Ethereal, ottieni l’URL di preview e lo mandi in risposta
-    if (!process.env.SMTP_HOST) {
-      const previewUrl = nodemailer.getTestMessageUrl(info)
-      console.log('Preview URL: ', previewUrl)
-      return res.status(200).json({ ok: true, previewUrl })
+        `,
+      })
+    } catch (mailErr) {
+      console.warn('⚠️ SMTP non configurato correttamente o errore invio mail:', mailErr)
+      // non blocchiamo l'utente, andiamo avanti
     }
-
-    return res.status(200).json({ ok: true })
-  } catch (err) {
-    console.error(err)
-    return res.status(500).json({ error: 'Errore interno' })
+  } else {
+    console.log('ℹ️ Credenziali SMTP non trovate, salto invio email.')
   }
+
+  // 5) Risposta di successo
+  return res.status(200).json({ ok: true })
 }

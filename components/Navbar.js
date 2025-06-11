@@ -1,4 +1,3 @@
-// components/Navbar.js
 import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -41,8 +40,8 @@ export default function Navbar() {
           <Image
             src="/img/LOGO-FENAM-14.png"
             alt="FENAM"
-            width={240}
-            height={80}
+            width={300}
+            height={100}
             priority
           />
         </Link>

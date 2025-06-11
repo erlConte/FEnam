@@ -20,17 +20,45 @@ export default function ValoriSection() {
         className="object-cover object-center opacity-40 -z-10"
       />
 
-      <div className="mx-auto grid max-w-7xl gap-12 px-6 lg:grid-cols-2">
-        {VALORI.map((v) => (
-          <Card
-            key={v.title}
-            badge="I Nostri Valori"
-            icon="/img/FENAM-ICON.png"
-            title={v.title}
-          >
-            <p className="mt-4 text-sm leading-relaxed text-secondary/90">{v.body}</p>
-          </Card>
-        ))}
+      <div className="mx-auto max-w-7xl px-6">
+        {/* Mobile & Tablet: 1 card per riga */}
+        <div className="grid grid-cols-1 gap-12 justify-items-center lg:hidden">
+          {VALORI.map((v) => (
+            <div key={v.title} className="w-80">
+              <Card badge="I Nostri Valori" icon="/img/FENAM-ICON.png" title={v.title}>
+                <p className="mt-4 text-sm leading-relaxed text-secondary/90">
+                  {v.body}
+                </p>
+              </Card>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop (≥lg): 2 card sulla prima riga, 3 sulla seconda */}
+        <div className="hidden lg:flex flex-col gap-12">
+          <div className="flex justify-center gap-6">
+            {VALORI.slice(0, 2).map((v) => (
+              <div key={v.title} className="w-80 flex-shrink-0">
+                <Card badge="I Nostri Valori" icon="/img/FENAM-ICON.png" title={v.title}>
+                  <p className="mt-4 text-sm leading-relaxed text-secondary/90">
+                    {v.body}
+                  </p>
+                </Card>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-center gap-6">
+            {VALORI.slice(2).map((v) => (
+              <div key={v.title} className="w-80 flex-shrink-0">
+                <Card badge="I Nostri Valori" icon="/img/FENAM-ICON.png" title={v.title}>
+                  <p className="mt-4 text-sm leading-relaxed text-secondary/90">
+                    {v.body}
+                  </p>
+                </Card>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   )
