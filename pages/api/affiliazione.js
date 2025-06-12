@@ -2,7 +2,6 @@
 import { useRouter } from 'next/router'
 import { useEffect } from 'react'
 import { toast, ToastContainer } from 'react-toastify'
-import AffiliazioneForm from '../components/AffiliazioneForm'
 
 export default function AffiliazionePage() {
   const { query } = useRouter()

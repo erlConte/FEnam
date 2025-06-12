@@ -1,6 +1,6 @@
 // pages/affiliazione.js
 import Head from 'next/head'
-import AffiliazioneForm from '../components/AffiliazioneForm'
+
 
 export default function Affiliazione() {
   return (
