@@ -21,21 +21,21 @@ export default function FuTurismoDetail() {
       "“FU TURISMO” è promosso da UNIMPRESA LAZIO: un laboratorio di idee dove istituzioni, imprenditori e professionisti si confronteranno per delineare il destino del settore extralberghiero.",
       "Il Giubileo 2025 porterà a Roma 35 milioni di visitatori e una spesa prevista di 16,7 miliardi di euro. La città e l’intera regione Lazio sono chiamate a rispondere a una sfida epocale: trasformare lo straordinario flusso turistico in un’opportunità di crescita sostenibile per l’intero ecosistema economico regionale e internazionale.",
       "“FU TURISMO” – dichiara il Presidente di UNIMPRESA LAZIO Edoardo Maria Lofoco – sarà il manifesto di questa rinascita sociale e culturale del territorio attraverso un moderno sviluppo del settore extralberghiero, connesso alle opportunità offerte da un sistema d’imprese etiche che contribuiscono alla rinascita più autentica dell’Italia. L’extralberghiero come nuova forza che genera bellezza, valore economico e orgoglio nazionale.",
-      "\n### Un Sistema Turistico che parla Italiano ###",
+      "\n● Un Sistema Turistico che parla Italiano ●",
       "Il settore extralberghiero è il riflesso più autentico del tessuto imprenditoriale italiano: migliaia di PMI, gestite con passione e saldamente radicate nel territorio. Diversamente dai grandi gruppi alberghieri – spesso controllati da multinazionali – queste realtà parlano la lingua delle comunità locali, creano reti e portano benefici concreti a borghi, famiglie e aree interne in via di spopolamento.",
       "Nel Lazio le presenze sono cresciute del 27,4 % nel 2023. Ciononostante il comparto è divenuto bersaglio di politiche punitive e narrazioni mediatiche distorte. “FU TURISMO” ribalta questa prospettiva, affermando il ruolo cruciale dell’ospitalità extralberghiera nella costruzione di un turismo più equo, sostenibile e democratico.",
       "“Il turismo extralberghiero – dichiara UNIMPRESA – con la sua autenticità e il radicamento nelle comunità locali, incarna l’essenza dell’ospitalità italiana: un intreccio di storie, tradizioni e innovazione che si oppone all’omologazione globale. Erasmus e le comunità straniere rafforzano questo tessuto, portando diversità e nuove prospettive, trasformando l’Italia in un faro di inclusione e creatività.”",
-      "\n### We Love Italia: la rivoluzione digitale ###",
+      "\n● We Love Italia: la rivoluzione digitale ●",
       "Verrà presentata **We Love Italia**, piattaforma B2B/B2C ponte tra operatori e consumatori. Non solo tecnologia, ma un catalizzatore per esperienze autentiche e sostenibili in tutto il Paese, valorizzando il Made in Italy.",
-      "\n### Valorizzare le cantine storiche ###",
+      "\n● Valorizzare le cantine storiche ●",
       "L’associazione **Radici di Futuro** illustrerà una proposta di legge per le cantine medievali del Lazio: degustazioni, laboratori d’arte e manifattura, eventi culturali, in sinergia con **ARSIAL** per integrare turismo e sviluppo agricolo.",
-      "\n### Formazione, regole e competitività ###",
+      "\n● Formazione, regole e competitività ●",
       "Normative chiare, formazione continua e incentivi alle PMI sono i pilastri per affrontare digitalizzazione, gestione sostenibile e accesso ai mercati globali.",
-      "\n### L’Unione fa la forza ###",
+      "\n● L’Unione fa la forza ●",
       "Unimpresa Lazio, guidata da giovani imprenditori, mira a diventare il baluardo dei diritti e degli interessi degli operatori del turismo.",
-      "\n### Erasmus e comunità straniere ###",
+      "\n● Erasmus e comunità straniere ●",
       "Il programma Erasmus è un asset strategico che porta valore economico e culturale a borghi e città; le comunità straniere in Italia arricchiscono il tessuto sociale e creano esperienze autentiche.",
-      "\n### Un manifesto per il futuro ###",
+      "\n● Un manifesto per il futuro ●",
       "Con il Giubileo 2025 e il richiamo globale del Made in Italy, Roma e il Lazio si ergono a simbolo dell’ambizione italiana: superare le logiche tradizionali e abbracciare un modello di turismo che celebri l’unicità del territorio, investa nella sostenibilità e garantisca crescita inclusiva.",
       "Il 21 gennaio 2025 prenderà forma una visione coraggiosa: un turismo che conserva e si reinventa, con politiche visionarie, digitalizzazione e sostenibilità come pilastri di una rinascita centrata su persone e comunità.",
       "“FU TURISMO” è il trampolino verso un futuro che valorizza non solo ciò che siamo, ma ciò che possiamo diventare.",
@@ -110,13 +110,7 @@ export default function FuTurismoDetail() {
     ],
   };
 
-  const [current, setCurrent] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrent((prev) => (prev + 1) % evt.images.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [evt.images.length]);
+  const [current, setCurrent] = useState(0)
 
   return (
     <>
@@ -126,8 +120,8 @@ export default function FuTurismoDetail() {
       </Head>
 
       <article className="mx-auto max-w-7xl px-6 py-16 grid gap-10 lg:grid-cols-12">
-        {/* Left column: Description + Contacts + Links */}
-        <section className="lg:col-span-6">
+        {/* Colonna sinistra */}
+        <section className="lg:col-span-6 flex flex-col">
           <h1 className="text-4xl font-extrabold text-secondary mb-4">
             {evt.title}
           </h1>
@@ -139,60 +133,75 @@ export default function FuTurismoDetail() {
           </p>
 
           {evt.description.map((p, i) => (
-            <p key={i} className="mb-4 text-secondary">
-              {p.replace(/^###\s*/, "")}
-            </p>
+            <p key={i} className="mb-4 text-secondary">{p}</p>
           ))}
 
           <h2 className="mt-12 text-2xl font-bold text-secondary">Contatti</h2>
           <p className="mb-4 text-secondary/90">
             <strong>Sito:</strong>{" "}
-            <a href={evt.contacts.sito} className="underline hover:text-primary">
-              {evt.contacts.sito.replace("https://", "")}            
+            <a
+              href={evt.contacts.sito}
+              className="underline hover:text-primary"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {evt.contacts.sito.replace(/^https?:\/\//, "")}
             </a>
             <br />
             <strong>Telefono:</strong> {evt.contacts.telefono}
             <br />
             <strong>Email:</strong>{" "}
-            <a href={`mailto:${evt.contacts.email}`} className="underline hover:text-primary">
+            <a
+              href={`mailto:${evt.contacts.email}`}
+              className="underline hover:text-primary"
+            >
               {evt.contacts.email}
             </a>
           </p>
 
           <details className="mb-12">
             <summary className="cursor-pointer text-primary underline">
-              Rassegna stampa &amp; link utili
+              Rassegna stampa & link utili
             </summary>
             <ul className="list-disc pl-5 mt-4 space-y-2 text-secondary/90">
               {evt.links.map((l) => (
                 <li key={l}>
                   <a
-                    href={l}
+                    href={`https://${l}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline hover:text-primary"
                   >
-                    {l.replace(/https?:\/\//, "")}
+                    {l}
                   </a>
                 </li>
               ))}
             </ul>
           </details>
+
+          {/* ← Torna agli eventi */}
+          <div className="mt-auto">
+            <Link href="/eventi" className="text-primary hover:underline">
+              ← Torna agli eventi
+            </Link>
+          </div>
         </section>
 
-        {/* Right column: Carousel, Program, Speakers */}
+        {/* Colonna destra */}
         <section className="lg:col-span-6">
-          <div className="relative">
+          <div className="relative mb-8">
             <Image
               src={evt.images[current]}
               alt={`${evt.title} ${current + 1}`}
               width={800}
               height={450}
-              className="w-full h-auto object-cover rounded-2xl mb-8"
+              className="w-full h-auto object-cover rounded-2xl"
               priority
             />
             <button
-              onClick={() => setCurrent((current - 1 + evt.images.length) % evt.images.length)}
+              onClick={() =>
+                setCurrent((current - 1 + evt.images.length) % evt.images.length)
+              }
               className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm rounded-full p-2"
             >
               <ChevronLeft size={24} />
@@ -220,12 +229,6 @@ export default function FuTurismoDetail() {
           </ul>
         </section>
       </article>
-
-      <div className="max-w-7xl px-6 mb-16">
-        <Link href="/eventi" className="text-primary hover:underline">
-          ← Torna agli eventi
-        </Link>
-      </div>
     </>
-  );
+  )
 }
