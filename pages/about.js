@@ -6,7 +6,7 @@ export default function About() {
       <Head><title>Chi Siamo | FENAM</title></Head>
 
       <section className="mx-auto max-w-4xl px-6 py-20">
-        <h1 className="mb-6 text-4xl font-bold">Chi Siamo</h1>
+        <h1 className="mb-6 text-4xl md:text-4xl font-bold leading-snug text-night">Chi Siamo</h1>
         <p className="mb-4 text-gray-700">
           La Federazione Nazionale di Associazioni Multiculturali (FE.N.A.M.)  si dedica a promuovere l'accoglienza e lo sviluppo delle comunità multiculturali in un contesto globale, attraverso  l’empowerment personale e professionale degli individui attraverso iniziative educative, culturali e sociali. 
 Riteniamo che il potenziamento individuale sia essenziale per stimolare la crescita economica e sociale. 

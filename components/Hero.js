@@ -40,25 +40,26 @@ export default function Hero() {
         />
 
         {/* ---------- card affiliazione --------- */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          <Link href="/affiliazione">
-            <Card
-              icon="/img/FENAM-ICON.png"
-              className="w-[85vw] max-w-xs sm:w-72 md:w-80 lg:w-96 text-center"
-            >
-              <span className="mb-3 inline-block rounded-full border border-secondary bg-primary/20 px-4 py-1 text-xs font-semibold">
-                Acquista ora
-              </span>
+        
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <Link href="/affiliazione">
+              <Card
+                icon="/img/FENAM-ICON.png"
+                className="w-[85vw] max-w-xs sm:w-72 md:w-80 lg:w-96 text-center"
+              >
+                <span className="mb-3 inline-block rounded-full border border-secondary bg-primary/20 px-4 py-1 text-xs font-semibold">
+                  Acquista ora
+                </span>
 
-              <h2 className="text-3xl md:text-4xl font-bold leading-snug">
-                Carta di<br />Affiliazione
-              </h2>
-              <p className="mx-auto mt-4 max-w-[30ch] text-xs text-secondary/80">
-                Un Mondo di Opportunità Ti Aspetta: Scopri i Vantaggi Esclusivi!
-              </p>
-            </Card>
-          </Link>
-        </div>
+                <h2 className="text-3xl md:text-4xl font-bold leading-snug text-night">
+                  Carta di<br />Affiliazione
+                </h2>
+                <p className="mx-auto mt-4 max-w-[30ch] text-xs text-secondary/80">
+                  Un Mondo di Opportunità Ti Aspetta: Scopri i Vantaggi Esclusivi!
+                </p>
+              </Card>
+            </Link>
+          </div>
       </div>
     </header>
   )

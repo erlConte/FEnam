@@ -1,25 +1,29 @@
-import Stripe from 'stripe'
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
+// pages/affiliazione.js
+import { useRouter } from 'next/router'
+import { useEffect } from 'react'
+import { toast, ToastContainer } from 'react-toastify'
+import AffiliazioneForm from '../components/AffiliazioneForm'
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end()
-  const { nome, cognome, email, telefono } = req.body
+export default function AffiliazionePage() {
+  const { query } = useRouter()
 
-  try {
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      mode: 'payment',
-      line_items: [
-        { price: process.env.STRIPE_PRICE_ID, quantity: 1 },
-      ],
-      customer_email: email,
-      metadata: { nome, cognome, telefono },
-      success_url: `${req.headers.origin}/affiliazione?success=1`,
-      cancel_url: `${req.headers.origin}/affiliazione?canceled=1`,
-    })
-    res.status(200).json({ url: session.url })
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: 'Errore checkout' })
-  }
+  useEffect(() => {
+    if (query.success) {
+      toast.success('Pagamento effettuato con successo!')
+    }
+  }, [query.success])
+
+  return (
+    <>
+      <ToastContainer position="top-center" autoClose={5000} />
+      {/* già esistente: Head, Hero, Offerta Servizi… */}
+      <section className="bg-paper pb-24 pt-10">
+        <div className="mx-auto max-w-7xl px-6 lg:grid lg:grid-cols-[minmax(320px,420px)_1fr] gap-14">
+          <AffiliazioneForm />
+          {/* descrizione colonna destra… */}
+        </div>
+      </section>
+      {/* resto della pagina… */}
+    </>
+  )
 }

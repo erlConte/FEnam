@@ -1,3 +1,4 @@
+// components/Navbar.js
 import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -5,12 +6,12 @@ import { Menu, X } from 'lucide-react'
 import { useRouter } from 'next/router'
 
 const nav = [
-  { href: '/about',     label: 'Chi Siamo' },
+  { href: '/about',      label: 'Chi Siamo' },
   { href: '/#settori',   label: 'I Nostri Settori' },
   { href: '/#progetti',  label: 'Progetti' },
-  { href: '/eventi',    label: 'Eventi' },
+  { href: '/eventi',     label: 'Eventi' },
   { href: '/affiliazione', label: 'Affiliazione' },
-  { href: '/blog', label: 'Blog' },
+  { href: '/blog',       label: 'Blog' },
 ]
 
 function NavLink({ href, label, close, active }) {
@@ -46,8 +47,8 @@ export default function Navbar() {
           />
         </Link>
 
-        {/* desktop menu */}
-        <ul className="hidden items-center gap-4 lg:flex">
+        {/* desktop menu: solo da xl in su */}
+        <ul className="hidden items-center gap-4 xl:flex">
           {nav.map((l) => (
             <li key={l.href}>
               <NavLink
@@ -67,13 +68,13 @@ export default function Navbar() {
           </li>
         </ul>
 
-        {/* burger button */}
-        <button onClick={() => setOpen(true)} className="lg:hidden">
+        {/* burger button: visibile fino a <xl */}
+        <button onClick={() => setOpen(true)} className="xl:hidden">
           <Menu size={28} />
         </button>
       </nav>
 
-      {/* overlay mobile */}
+      {/* overlay mobile/tablet/desktop fino a <xl */}
       {open && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-8 bg-white">
           <button
@@ -94,7 +95,7 @@ export default function Navbar() {
           ))}
 
           <Link
-            href="#contatti"
+            href="/#contatti"
             onClick={() => setOpen(false)}
             className="rounded-full bg-primary px-6 py-2 font-semibold text-white"
           >

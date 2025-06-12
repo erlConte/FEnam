@@ -27,3 +27,15 @@ model ContactMessage {
   messaggio  String
   createdAt  DateTime @default(now())
 }
+
+model Affiliation {
+  id         String   @id @default(cuid())
+  nome       String
+  cognome    String
+  email      String
+  telefono   String
+  privacy    Boolean
+  orderId    String?  @unique
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+}
