@@ -5,8 +5,8 @@ const VALORI = [
   { title: 'Accogliente', body: 'Crediamo in una società che abbraccia la diversità, promuovendo la realizzazione personale e la crescita collettiva. Ogni persona è un tassello fondamentale nel mosaico della nostra società.' },
   { title: 'Rispetto', body: 'Rispettiamo e celebriamo i valori e le tradizioni di ogni cultura rappresentata nella nostra federazione. La diversità è la nostra forza e il rispetto reciproco è alla base delle nostre interazioni.' },
   { title: 'Collaborazione', body: 'Crediamo che la collaborazione sia la chiave per creare opportunità concrete che migliorino la qualità della vita nelle nostre comunità. La sinergia tra culture diverse e le nostre associazioni è essenziale per affrontare le sfide che ci troviamo a fronteggiare.' },
-  { title: 'Innovazione', body: "Promuoviamo l'innovazione e il progresso attraverso iniziative che stimolino la creatività e l'imprenditorialità. Siamo convinti che, creando spazi e opportunità, possiamo ispirare nuove idee e sostenere progetti imprenditoriali che rispondano alle esigenze delle nostre comunità." },
   { title: 'Sostenibilità', body: 'Promuoviamo pratiche sostenibili che garantiscano uno sviluppo equo e responsabile, rispettando l\'ambiente e le risorse del nostro pianeta. La sostenibilità non è solo un obiettivo, ma un impegno concreto verso il presente e il futuro.' },
+  { title: 'Innovazione', body: "Promuoviamo l'innovazione e il progresso attraverso iniziative che stimolino la creatività e l'imprenditorialità. Siamo convinti che, creando spazi e opportunità, possiamo ispirare nuove idee e sostenere progetti imprenditoriali che rispondano alle esigenze delle nostre comunità." },
 ]
 
 export default function ValoriSection() {

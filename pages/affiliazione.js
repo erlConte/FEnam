@@ -56,7 +56,7 @@ export default function Affiliazione() {
     <p className="font-medium">Polizza Assicurativa Gratuita</p>
     <ul className="list-disc space-y-0.5 pl-5">
       <li>Copertura fino a €300 per ogni intervento.</li>
-      <li>Invio di tecnici qualificati …</li>
+      <li>Invio di tecnici qualificati.</li>
     </ul>
 
     <p className="font-medium">Convenzioni</p>
@@ -66,23 +66,23 @@ export default function Affiliazione() {
 
     <p className="font-medium">Eventi e Progetti</p>
     <ul className="list-disc space-y-0.5 pl-5">
-      <li>Partecipazione a eventi normali e premium …</li>
+      <li>Partecipazione a eventi normali e premium. </li>
     </ul>
 
     <p className="font-medium">Sconti e Consulenze</p>
     <ul className="list-disc space-y-0.5 pl-5">
-      <li>Analisi e posizionamento associativo …</li>
-      <li>Sconti su traduzioni ufficiali …</li>
+      <li>Analisi e posizionamento associativo.</li>
+      <li>Sconti su traduzioni ufficiali.</li>
     </ul>
 
     <p className="font-medium">Servizi CAF/PATRONATO</p>
     <ul className="list-disc space-y-0.5 pl-5">
-      <li>Consulenze gratuite per pratiche …</li>
+      <li>Consulenze gratuite per pratiche.</li>
     </ul>
 
     <p className="font-medium">Supporto Lavorativo</p>
     <ul className="list-disc space-y-0.5 pl-5">
-      <li>Consulenza gratuita per inserimento lavorativo …</li>
+      <li>Consulenza gratuita per inserimento lavorativo.</li>
     </ul>
 
     <p className="font-medium">Confronto di Mercato</p>
@@ -113,7 +113,7 @@ export default function Affiliazione() {
 
     <p className="font-medium">Polizza Assicurativa Gratuita</p>
     <ul className="list-disc space-y-0.5 pl-5">
-      <li>Copertura fino a €300 …</li>
+      <li>Copertura fino a €300.</li>
     </ul>
 
     <p className="font-medium">Convenzioni e Sconti</p>

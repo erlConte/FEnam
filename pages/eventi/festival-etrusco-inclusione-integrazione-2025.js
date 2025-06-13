@@ -12,7 +12,7 @@ export default function EventDetail() {
     slug: 'festival-etrusco-inclusione-integrazione-2025',
     title: "4º FESTIVAL ETRUSCO dell'INCLUSIONE e dell'INTEGRAZIONE",
     subtitle: 'Regione Lazio – Per Terra e Per Mare',
-    date: '20–23 Giugno 2025',
+    date: '20–23 Giugno 2024',
     time: '',
     location: 'Cerveteri, Piazza Santa Maria – Sala Ruspoli',
     excerpt: 'Ingresso gratuito: arte, convegni, spettacoli, multicultura e tanto altro a Cerveteri.',
@@ -27,20 +27,20 @@ export default function EventDetail() {
     ],
     schedule: [
       {
-        date: 'Giovedì 20 Giugno 2025',
+        date: 'Giovedì 20 Giugno 2024',
         activity: 'Mostra d’arte, aperitivo e live music; spettacolo teatrale.',
       },
       {
-        date: 'Venerdì 21 Giugno 2025',
+        date: 'Venerdì 21 Giugno 2024',
         activity: 'Convegni e conferenze; spettacolo teatrale.',
       },
       {
-        date: 'Sabato 22 Giugno 2025',
+        date: 'Sabato 22 Giugno 2024',
         activity:
           'Grande festa multiculturale con ambasciate e consolati; street food; cocktail tropicali; attività per bambini; sfilata folklorica; esibizioni musicali; DJ set.',
       },
       {
-        date: 'Domenica 23 Giugno 2025',
+        date: 'Domenica 23 Giugno 2024',
         activity: 'Tavola rotonda istituzionale; aperitivo e live music; concerto finale.',
       },
     ],

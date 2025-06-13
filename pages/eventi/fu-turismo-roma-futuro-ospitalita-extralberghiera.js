@@ -119,25 +119,190 @@ export default function FuTurismoDetail() {
         <meta name="description" content={evt.excerpt} />
       </Head>
 
-      <article className="mx-auto max-w-7xl px-6 py-16 grid gap-10 lg:grid-cols-12">
-        {/* Colonna sinistra */}
-        <section className="lg:col-span-6 flex flex-col">
-          <h1 className="text-4xl font-extrabold text-secondary mb-4">
-            {evt.title}
-          </h1>
-          <p className="italic text-secondary/80 mb-6">{evt.subtitle}</p>
-          <p className="text-secondary mb-6">
-            <strong>Data:</strong> {evt.date}
-            <br />
-            <strong>Luogo:</strong> {evt.location}
-          </p>
+      {/* Desktop: codice originale */}
+      <div className="hidden lg:block">
+        <article className="mx-auto max-w-7xl px-6 py-16 grid gap-10 lg:grid-cols-12">
+          {/* Colonna sinistra */}
+          <section className="lg:col-span-6 flex flex-col">
+            <h1 className="text-4xl font-extrabold text-secondary mb-4">
+              {evt.title}
+            </h1>
+            <p className="italic text-secondary/80 mb-6">{evt.subtitle}</p>
+            <p className="text-secondary mb-6">
+              <strong>Data:</strong> {evt.date}
+              <br />
+              <strong>Luogo:</strong> {evt.location}
+            </p>
 
+            {evt.description.map((p, i) => (
+              <p key={i} className="mb-4 text-secondary">{p}</p>
+            ))}
+
+            <h2 className="mt-12 text-2xl font-bold text-secondary">Contatti</h2>
+            <p className="mb-4 text-secondary/90">
+              <strong>Sito:</strong>{" "}
+              <a
+                href={evt.contacts.sito}
+                className="underline hover:text-primary"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {evt.contacts.sito.replace(/^https?:\/\//, "")}
+              </a>
+              <br />
+              <strong>Telefono:</strong> {evt.contacts.telefono}
+              <br />
+              <strong>Email:</strong>{" "}
+              <a
+                href={`mailto:${evt.contacts.email}`}
+                className="underline hover:text-primary"
+              >
+                {evt.contacts.email}
+              </a>
+            </p>
+
+            <details className="mb-12">
+              <summary className="cursor-pointer text-primary underline">
+                Rassegna stampa & link utili
+              </summary>
+              <ul className="list-disc pl-5 mt-4 space-y-2 text-secondary/90">
+                {evt.links.map((l) => (
+                  <li key={l}>
+                    <a
+                      href={l.startsWith("http") ? l : `https://${l}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-primary"
+                    >
+                      {l}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+
+            <div className="mt-auto">
+              <Link href="/eventi" className="text-primary hover:underline">
+                ← Torna agli eventi
+              </Link>
+            </div>
+          </section>
+
+          {/* Colonna destra */}
+          <section className="lg:col-span-6">
+            <div className="relative mb-8">
+              <Image
+                src={evt.images[current]}
+                alt={`${evt.title} ${current + 1}`}
+                width={800}
+                height={450}
+                className="w-full h-auto object-cover rounded-2xl"
+                priority
+              />
+              <button
+                onClick={() =>
+                  setCurrent((current - 1 + evt.images.length) % evt.images.length)
+                }
+                className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm rounded-full p-2"
+              >
+                <ChevronLeft size={24} />
+              </button>
+              <button
+                onClick={() => setCurrent((current + 1) % evt.images.length)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm rounded-full p-2"
+              >
+                <ChevronRight size={24} />
+              </button>
+            </div>
+
+            <h2 className="text-2xl font-bold text-secondary mb-4">Programma</h2>
+            <ul className="list-disc pl-5 mb-8 text-secondary/90 space-y-2">
+              {evt.program.map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+
+            <h2 className="text-2xl font-bold text-secondary mb-4">
+              Relatori e Ospiti
+            </h2>
+            <ul className="list-disc pl-5 mb-8 text-secondary/90 space-y-1 columns-1 md:columns-2 lg:columns-2">
+              {evt.speakers.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ul>
+          </section>
+        </article>
+      </div>
+
+      {/* Mobile: nuovo markup */}
+      <div className="block lg:hidden px-6 py-10">
+        <h1 className="text-2xl font-bold mb-2">{evt.title}</h1>
+        <p className="italic mb-4">{evt.subtitle}</p>
+        <p className="mb-6">
+          <strong>Data:</strong> {evt.date}
+          <br />
+          <strong>Luogo:</strong> {evt.location}
+        </p>
+
+        {/* 1. Immagini */}
+        <div className="relative mb-6">
+          <Image
+            src={evt.images[current]}
+            alt={`${evt.title} ${current + 1}`}
+            width={400}
+            height={225}
+            className="w-full h-auto object-cover rounded-lg"
+            priority
+          />
+          <button
+            onClick={() =>
+              setCurrent((current - 1 + evt.images.length) % evt.images.length)
+            }
+            className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm rounded-full p-2"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <button
+            onClick={() => setCurrent((current + 1) % evt.images.length)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm rounded-full p-2"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+
+        {/* 2. Descrizione */}
+        <div className="mb-6">
           {evt.description.map((p, i) => (
-            <p key={i} className="mb-4 text-secondary">{p}</p>
+            <p key={i} className="mb-3 text-secondary">
+              {p}
+            </p>
           ))}
+        </div>
 
-          <h2 className="mt-12 text-2xl font-bold text-secondary">Contatti</h2>
-          <p className="mb-4 text-secondary/90">
+        {/* 3. Programma */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-2">Programma</h2>
+          <ul className="list-disc pl-5 space-y-1">
+            {evt.program.map((item, i) => (
+              <li key={i}>{item}</li>
+            ))}
+          </ul>
+        </div>
+
+        {/* 4. Relatori e Ospiti */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-2">Relatori e Ospiti</h2>
+          <ul className="list-disc pl-5 space-y-1">
+            {evt.speakers.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </div>
+
+        {/* 5. Contatti */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-2">Contatti</h2>
+          <p className="text-secondary/90 mb-1">
             <strong>Sito:</strong>{" "}
             <a
               href={evt.contacts.sito}
@@ -147,9 +312,11 @@ export default function FuTurismoDetail() {
             >
               {evt.contacts.sito.replace(/^https?:\/\//, "")}
             </a>
-            <br />
+          </p>
+          <p className="text-secondary/90 mb-1">
             <strong>Telefono:</strong> {evt.contacts.telefono}
-            <br />
+          </p>
+          <p className="text-secondary/90">
             <strong>Email:</strong>{" "}
             <a
               href={`mailto:${evt.contacts.email}`}
@@ -158,16 +325,19 @@ export default function FuTurismoDetail() {
               {evt.contacts.email}
             </a>
           </p>
+        </div>
 
-          <details className="mb-12">
+        {/* 6. Link utili + Torna agli eventi */}
+        <div>
+          <details className="mb-4">
             <summary className="cursor-pointer text-primary underline">
               Rassegna stampa & link utili
             </summary>
-            <ul className="list-disc pl-5 mt-4 space-y-2 text-secondary/90">
+            <ul className="list-disc pl-5 space-y-1 text-secondary/90">
               {evt.links.map((l) => (
                 <li key={l}>
                   <a
-                    href={`https://${l}`}
+                    href={l.startsWith("http") ? l : `https://${l}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline hover:text-primary"
@@ -178,57 +348,11 @@ export default function FuTurismoDetail() {
               ))}
             </ul>
           </details>
-
-          {/* ← Torna agli eventi */}
-          <div className="mt-auto">
-            <Link href="/eventi" className="text-primary hover:underline">
-              ← Torna agli eventi
-            </Link>
-          </div>
-        </section>
-
-        {/* Colonna destra */}
-        <section className="lg:col-span-6">
-          <div className="relative mb-8">
-            <Image
-              src={evt.images[current]}
-              alt={`${evt.title} ${current + 1}`}
-              width={800}
-              height={450}
-              className="w-full h-auto object-cover rounded-2xl"
-              priority
-            />
-            <button
-              onClick={() =>
-                setCurrent((current - 1 + evt.images.length) % evt.images.length)
-              }
-              className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm rounded-full p-2"
-            >
-              <ChevronLeft size={24} />
-            </button>
-            <button
-              onClick={() => setCurrent((current + 1) % evt.images.length)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-sm rounded-full p-2"
-            >
-              <ChevronRight size={24} />
-            </button>
-          </div>
-
-          <h2 className="text-2xl font-bold text-secondary mb-4">Programma</h2>
-          <ul className="list-disc pl-5 mb-8 text-secondary/90 space-y-2">
-            {evt.program.map((item, i) => (
-              <li key={i}>{item}</li>
-            ))}
-          </ul>
-
-          <h2 className="text-2xl font-bold text-secondary mb-4">Relatori e Ospiti</h2>
-          <ul className="list-disc pl-5 mb-8 text-secondary/90 space-y-1 columns-1 md:columns-2 lg:columns-2">
-            {evt.speakers.map((s, i) => (
-              <li key={i}>{s}</li>
-            ))}
-          </ul>
-        </section>
-      </article>
+          <Link href="/eventi" className="text-primary hover:underline">
+            ← Torna agli eventi
+          </Link>
+        </div>
+      </div>
     </>
-  )
+  );
 }

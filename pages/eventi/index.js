@@ -18,7 +18,7 @@ export const events = [
     slug: 'festival-etrusco-inclusione-integrazione-2025',
     title: "4º FESTIVAL ETRUSCO dell'INCLUSIONE e dell'INTEGRAZIONE", 
     subtitle: 'Regione Lazio per Terra e per Mare',
-    date: '20–23 Giugno 2025',
+    date: '20–23 Giugno 2024',
     time: '',
     location: 'Cerveteri, Piazza Santa Maria, Sala Ruspoli',
     excerpt: 'Ingresso gratuito: arte, conferenze, spettacoli, street food e attività per tutti i giorni.',
@@ -29,7 +29,7 @@ export const events = [
     slug: 'fu-turismo-roma-futuro-ospitalita-extralberghiera',
     title: 'FU TURISMO: Roma e il Futuro dell’Ospitalità Extralberghiera',
     subtitle: 'Auditorium Antonianum, Roma',
-    date: '21 Gennaio 2025',
+    date: '21 Gennaio 2024',
     time: '09:00–18:00',
     location: 'Auditorium Antonianum, Roma',
     excerpt:
