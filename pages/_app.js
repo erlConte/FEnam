@@ -29,6 +29,8 @@ export default function MyApp({ Component, pageProps }) {
 
       {/* notifiche newsletter / form */}
       <ToastContainer position="bottom-right" />
+      
+      {/* Analytics di Vercel */}
       <Analytics />
     </Layout>
   )
