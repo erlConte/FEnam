@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
+import { Analytics } from '@vercel/analytics/react'
 
 export default function MyApp({ Component, pageProps }) {
   const router = useRouter()
@@ -28,6 +29,7 @@ export default function MyApp({ Component, pageProps }) {
 
       {/* notifiche newsletter / form */}
       <ToastContainer position="bottom-right" />
+      <Analytics />
     </Layout>
   )
 }

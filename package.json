@@ -12,6 +12,7 @@
     "@hookform/resolvers": "^5.1.1",
     "@paypal/checkout-server-sdk": "^1.0.3",
     "@prisma/extension-accelerate": "^2.0.1",
+    "@vercel/analytics": "^1.5.0",
     "framer-motion": "^12.16.0",
     "lucide-react": "^0.513.0",
     "next": "latest",
