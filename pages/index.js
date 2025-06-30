@@ -2,7 +2,6 @@ import Head from 'next/head'
 import Hero from '../components/Hero'
 import SectorsShowcase from '../components/SectorsShowcase'
 import ValoriSection from '../components/ValoriSection'
-import ProjectsSection from '../components/ProjectsSection'
 import ContactNewsletter from '../components/ContactNewsletter'
 import MissionSection from '../components/MissionSection'
 
@@ -14,7 +13,6 @@ export default function Home() {
       <MissionSection/>
       <SectorsShowcase />
       <ValoriSection />
-      <ProjectsSection />
       <ContactNewsletter />
     </>
   )
