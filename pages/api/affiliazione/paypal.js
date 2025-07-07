@@ -1,86 +1,40 @@
-// pages/api/affiliazione/paypal.js
-import PayPal from '@paypal/checkout-server-sdk'
-import { PrismaClient } from '@prisma/client'
+import paypal from '@paypal/checkout-server-sdk'
 
-const prisma = new PrismaClient()
+const environment = new paypal.core.LiveEnvironment(
+  process.env.PAYPAL_CLIENT_ID,
+  process.env.PAYPAL_CLIENT_SECRET
+)
+const client = new paypal.core.PayPalHttpClient(environment)
 
 export default async function handler(req, res) {
-  console.log('▶️ [PayPal API] NODE_ENV:', process.env.NODE_ENV)
-  console.log('▶️ [PayPal API] PAYPAL_CLIENT_ID:', process.env.PAYPAL_CLIENT_ID)
-  console.log('▶️ [PayPal API] PAYPAL_CLIENT_SECRET present?', !!process.env.PAYPAL_CLIENT_SECRET)
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
-  const { nome, cognome, email, telefono, privacy } = req.body
-  if (!nome || !cognome || !email || !telefono || privacy !== true) {
-    return res.status(400).json({ error: 'Dati mancanti o consenso non dato' })
-  }
-
-  // Salva prima la richiesta in DB
-  let affiliation
-  try {
-    affiliation = await prisma.affiliation.create({
-      data: { nome, cognome, email, telefono, privacy }
-    })
-  } catch (dbErr) {
-    console.error('❌ [PayPal API] Errore salvataggio DB:', dbErr)
-    return res.status(500).json({ error: 'Errore interno al server' })
-  }
-
-  // Scegli environment sandbox vs live
-  const environment =
-    process.env.NODE_ENV === 'production'
-      ? new PayPal.core.LiveEnvironment(
-          process.env.PAYPAL_CLIENT_ID,
-          process.env.PAYPAL_CLIENT_SECRET
-        )
-      : new PayPal.core.SandboxEnvironment(
-          process.env.PAYPAL_CLIENT_ID,
-          process.env.PAYPAL_CLIENT_SECRET
-        )
-  const client = new PayPal.core.PayPalHttpClient(environment)
+  if (req.method !== 'POST') return res.status(405).end()
 
   try {
-    // *** crea la request per PayPal ***
-    const createOrderRequest = new PayPal.orders.OrdersCreateRequest()
-    createOrderRequest.prefer('return=representation')
-    createOrderRequest.requestBody({
+    const { nome, cognome, email, telefono, donazione = 0 } = req.body
+    const extra = Math.max(parseFloat(donazione) || 0, 0)          // >= 0
+    const total = (85 + extra).toFixed(2)                           // string «xx.xx»
+
+    // ① crea ordine PayPal
+    const request = new paypal.orders.OrdersCreateRequest()
+    request.requestBody({
       intent: 'CAPTURE',
       purchase_units: [
         {
-          description: 'Affiliazione F.E.N.A.M. – Carta Imprese',
-          amount: { currency_code: 'EUR', value: '85.00' },
-          custom_id: affiliation.id
-        }
+          amount: { currency_code: 'EUR', value: total },
+          description:
+            extra > 0
+              ? `Affiliazione €85 + Donazione €${extra.toFixed(2)}`
+              : 'Affiliazione €85',
+        },
       ],
-      application_context: {
-        brand_name: 'F.E.N.A.M.',
-        user_action: 'PAY_NOW',
-        return_url: `${req.headers.origin}/affiliazione?success=true`,
-        cancel_url: `${req.headers.origin}/affiliazione?canceled=true`,
-      },
     })
+    const order = await client.execute(request)
 
-    // *** esegui la request ***
-    const order = await client.execute(createOrderRequest)
-    console.log('✅ [PayPal API] order created:', order.result)
-
-    // Aggiorna il record con l’orderId
-    await prisma.affiliation.update({
-      where: { id: affiliation.id },
-      data: { orderId: order.result.id }
-    })
+    // ② (facoltativo) salva nel DB dati + orderId + total …
 
     return res.status(200).json({ orderID: order.result.id })
   } catch (err) {
-    console.error('❌ [PayPal API] error full object:', err)
-    if (err.statusCode && err._originalError?.response) {
-      console.error(
-        '❌ [PayPal API] response body:',
-        await err._originalError.response.text()
-      )
-    }
-    return res.status(500).json({ error: 'Errore durante la creazione dell’ordine' })
+    console.error('❌ [PayPal API] error:', err)
+    return res.status(500).json({ error: 'PayPal error' })
   }
 }

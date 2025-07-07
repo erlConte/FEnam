@@ -1,142 +1,102 @@
-// components/AffiliazioneForm.js
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
-// Schema di validazione
 const schema = z.object({
   nome:     z.string().min(2, 'Obbligatorio'),
   cognome:  z.string().min(2, 'Obbligatorio'),
   email:    z.string().email('Email non valida'),
   telefono: z.string().min(5, 'Obbligatorio'),
-  privacy:  z.boolean().refine(v => v, { message: 'Richiesto' }),
+  privacy:  z.boolean().refine(Boolean, { message: 'Richiesto' }),
+  donazione:z.string().optional(), // testo, convertirai a numero
 })
 
 export default function AffiliazioneForm() {
-  const [scriptReady, setScriptReady] = useState(false)
-  const paypalRef = useRef()
+  const [sdkReady, setSdkReady] = useState(false)
+  const paypalRef = useRef(null)
+
   const {
     register,
     formState: { errors },
     getValues,
   } = useForm({ resolver: zodResolver(schema) })
 
-  // Carica il JS SDK di PayPal
+  /* carica SDK PayPal una sola volta */
   useEffect(() => {
-    if (!window.paypal) {
-      const s = document.createElement('script')
-      s.src = `https://www.paypal.com/sdk/js?client-id=${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID}&currency=EUR`
-      s.onload = () => setScriptReady(true)
-      document.body.appendChild(s)
-    } else {
-      setScriptReady(true)
-    }
+    if (window.paypal) return setSdkReady(true)
+    const s = document.createElement('script')
+    s.src = `https://www.paypal.com/sdk/js?client-id=${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID}&currency=EUR`
+    s.onload = () => setSdkReady(true)
+    document.body.appendChild(s)
   }, [])
 
-  // Renderizza il bottone PayPal una volta che lo script è pronto
+  /* render bottone */
   useEffect(() => {
-    if (!scriptReady || !paypalRef.current) return
+    if (!sdkReady || !paypalRef.current) return
 
     window.paypal.Buttons({
-      style: {
-        layout: 'vertical',
-        shape: 'rect',
-        label: 'paypal',
-        height: 40,
-      },
+      style: { layout: 'vertical', label: 'paypal', height: 40 },
 
-      // Creazione dell'ordine
+      /* crea ordine */
       createOrder: async () => {
-        const values = getValues()
-        console.log('[PayPal] createOrder with values:', values)
-
-        const res = await fetch('/api/affiliazione/paypal', {
+        const payload = getValues()
+        const res  = await fetch('/api/affiliazione/paypal', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(values),
+          body: JSON.stringify(payload),
         })
         const json = await res.json()
-        console.log('[PayPal] /api/affiliazione/paypal response:', res.status, json)
-
-        if (!res.ok || !json.orderID) {
-          const errMsg = json.error || 'Nessun orderID restituito'
-          toast.error(`[PayPal] Errore: ${errMsg}`)
-          throw new Error(errMsg)
-        }
+        if (!res.ok) throw new Error(json.error || 'Errore ordine')
         return json.orderID
       },
 
-      // Cattura dell'ordine al click di conferma
-      onApprove: async (data, actions) => {
-        try {
-          const details = await actions.order.capture()
-          console.log('[PayPal] capture details:', details)
-          toast.success('Pagamento effettuato con successo!')
-        } catch (captureErr) {
-          console.error('[PayPal] capture error:', captureErr)
-          toast.error('Errore durante la cattura del pagamento')
-        }
-      },
-
-      onError: (err) => {
-        console.error('[PayPal] onError', err)
-        toast.error('Errore PayPal, controlla console.')
-      },
-      onCancel: () => {
-        toast.info('Pagamento annullato.')
-      },
+      onApprove: () => toast.success('Pagamento completato!'),
+      onError:   () => toast.error('Errore PayPal'),
     }).render(paypalRef.current)
-  }, [scriptReady, getValues])
+  }, [sdkReady])
 
   return (
-    <form
-      onSubmit={(e) => e.preventDefault()}
-      className="form-col space-y-6 rounded-3xl bg-[#8fd1d2] p-8 text-secondary"
-    >
+    <form onSubmit={(e) => e.preventDefault()}
+          className="form-col space-y-6 rounded-3xl bg-[#8fd1d2] p-8 text-secondary">
+
       <h2 className="text-3xl font-bold">Carta di Affiliazione</h2>
 
-      {['nome', 'cognome', 'email', 'telefono'].map((field) => (
-        <div key={field}>
-          <label className="mb-1 block text-sm capitalize">
-            {field}
-            {field === 'email' && ' *'}
-          </label>
-          <input
-            {...register(field)}
-            type={field === 'email' ? 'email' : 'text'}
-            className="input-field"
-          />
-          {errors[field] && (
-            <p className="mt-1 text-xs text-red-600">
-              {errors[field].message}
-            </p>
-          )}
+      {['nome', 'cognome', 'email', 'telefono'].map((f) => (
+        <div key={f}>
+          <label className="mb-1 block text-sm capitalize">{f}</label>
+          <input {...register(f)} type={f === 'email' ? 'email' : 'text'} className="input-field" />
+          {errors[f] && <p className="mt-1 text-xs text-red-600">{errors[f].message}</p>}
         </div>
       ))}
 
-      <label className="flex items-center gap-2 text-xs">
+      {/* Importo donazione facoltativo */}
+      <div>
+        <label className="mb-1 block text-sm">Donazione extra (facoltativa)</label>
         <input
-          type="checkbox"
-          {...register('privacy')}
-          className="h-4 w-4"
+          {...register('donazione')}
+          type="number"
+          step="0.01"
+          min="0"
+          placeholder="0.00"
+          className="input-field"
         />
-        Accetto termini &amp; privacy *
+        {errors.donazione && (
+          <p className="mt-1 text-xs text-red-600">{errors.donazione.message}</p>
+        )}
+      </div>
+
+      {/* Privacy */}
+      <label className="flex items-center gap-2 text-xs">
+        <input type="checkbox" {...register('privacy')} className="h-4 w-4" /> Accetto termini &amp; privacy *
       </label>
-      {errors.privacy && (
-        <p className="mt-1 text-xs text-red-600">
-          {errors.privacy.message}
-        </p>
-      )}
+      {errors.privacy && <p className="mt-1 text-xs text-red-600">{errors.privacy.message}</p>}
 
-      {/* PayPal Button container */}
-      <div ref={paypalRef} className="w-full mt-4"></div>
-
-      <p className="text-center text-xs">
-        Carta di affiliazione €85/anno
-      </p>
+      {/* Bottone PayPal */}
+      <p className="pt-4 text-center text-sm">Totale minimo € 85,00</p>
+      <div ref={paypalRef} className="w-full" />
     </form>
   )
 }
