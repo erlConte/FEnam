@@ -12,6 +12,7 @@ const nav = [
   { href: '/eventi',     label: 'Eventi' },
   { href: '/affiliazione', label: 'Affiliazione' },
   { href: '/blog',       label: 'Blog' },
+  { href: '/comunicati', label: 'Comunicati' },
 ]
 
 function NavLink({ href, label, close, active }) {

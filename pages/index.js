@@ -4,6 +4,8 @@ import SectorsShowcase from '../components/SectorsShowcase'
 import ValoriSection from '../components/ValoriSection'
 import ContactNewsletter from '../components/ContactNewsletter'
 import MissionSection from '../components/MissionSection'
+import { comunicati } from './comunicati'           // relativo a pages/
+import ComunicatiSection from '../components/ComunicatiSection'
 
 export default function Home() {
   return (
@@ -13,6 +15,7 @@ export default function Home() {
       <MissionSection/>
       <SectorsShowcase />
       <ValoriSection />
+      <ComunicatiSection items={comunicati.slice(0,3)} />
       <ContactNewsletter />
     </>
   )

@@ -11,7 +11,14 @@ export default function ProgettiPage() {
       excerpt:
         'FENAM collabora con DINOI, ponte tra la tradizione italiana e il dinamismo latinoamericano, un progetto etico e tecnologico per un valore condiviso.',
     },
-  ]
+  
+    {
+      slug: 'enotempo',
+      title: 'ENOTEMPO – Wine & Culture Experience',
+      cover: '/img/progetti/enotempo/enotempo.jpg',
+      excerpt: 'Carosello sensoriale fra vino, storytelling e territori.',
+    },
+]
 
   return (
     <>
