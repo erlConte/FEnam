@@ -13,6 +13,12 @@ export const comunicati = [
     date : '18 luglio 2025',
     cover: '/img/comunicati/calabria-latin-america.jpg',
   },
+  {
+    id: 'ringraziamento-civita',
+    titolo: 'Lettera di ringraziamento – Avv. Civita Di Russo',
+    data: '01 luglio 2025',
+    cover: '/img/comunicati/ringraziamentodirusso.jpg',
+  },
   // { slug:'altro', title:'…', date:'…', cover:'/img/comunicati/…' },
 ]
 

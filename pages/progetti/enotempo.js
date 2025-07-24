@@ -3,47 +3,43 @@ import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import Image from 'next/image'
 import Link from 'next/link'
-import {
-  ChevronLeft,
-  ChevronRight,
-  CalendarPlus,
-  Flag,
-} from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarPlus, Flag } from 'lucide-react'
 
 /* ------------------------------------------------------------- */
-/* CAROSELLO – assicurati che le immagini siano in /public/img…  */
-const slides = Array.from({ length: 8 }, (_, i) => (
+/* IMMAGINI CAROSELLO (8 slide in /public/img/progetti/enotempo/) */
+const slides = Array.from({ length: 8 }, (_, i) =>
   `/img/progetti/enotempo/slide-${i + 1}.jpg`
-))
+)
 
 /* DATI EVENTO */
 const evento = {
   titolo: 'ENOTEMPO · Wine & Culture Experience',
   luogo: 'Roma – Auditorium (TBD)',
   startISO: '2025-10-03T19:00:00',
-  endISO: '2025-10-03T23:00:00',
+  endISO:   '2025-10-03T23:00:00',
 }
 
-/* TESTI IT / ES ------------------------------------------------ */
+/* TESTI -------------------------------------------------------- */
 const testi = {
   it: {
-    chi: `ENOTEMPO è molto più di un progetto: un’esperienza che nasce dall’incontro fra vino, cultura e narrazione. Creiamo eventi multisensoriali che connettono le persone attraverso sapori, storie e territori.`,
+    chi: `ENOTEMPO è molto più di un progetto: un’esperienza che nasce
+dall’incontro fra vino, cultura e narrazione. Creiamo eventi multisensoriali
+che connettono le persone attraverso sapori, storie e territori.`,
   },
   es: {
-    chi: `ENOTEMPO es mucho más que un proyecto: es una vivencia que nace de la fusión entre vino, cultura y narrativa. Diseñamos catas multisensoriales que despiertan los sentidos y conectan a las personas.`,
-    mision: `Misión — Diseñamos experiencias multisensoriales donde el arte del maridaje se entrelaza con la cultura, la naturaleza y las personas.`,
-    vision: `Visión — Consolidar una red de eventos en destinos emblemáticos del mundo, donde los productos de excelencia sean puentes entre culturas y sentidos.`,
-    valores: [
-      'Autenticidad',
-      'Elegancia',
-      'Calidad',
-      'Cultura',
-      'Conexión',
-    ],
+    chi: `ENOTEMPO es mucho más que un proyecto: es una vivencia que nace de
+la fusión entre vino, cultura y narrativa. Diseñamos catas multisensoriales
+que despiertan los sentidos y conectan a las personas.`,
+    mision: `Misión — Diseñamos experiencias multisensoriales donde el arte
+del maridaje se entrelaza con la cultura, la naturaleza y las personas.`,
+    vision: `Visión — Consolidar una red de eventos en destinos emblemáticos
+del mundo, donde los productos de excelencia sean puentes entre culturas y
+sentidos.`,
+    valores: ['Autenticidad', 'Elegancia', 'Calidad', 'Cultura', 'Conexión'],
   },
 }
 
-/* MENU Tullpukuna --------------------------------------------- */
+/* MENU --------------------------------------------------------- */
 const menu = {
   it: [
     {
@@ -91,8 +87,8 @@ const menu = {
   ],
 }
 
-/* CREA ICS ----------------------------------------------------- */
-const createIcsUrl = () => {
+/* HELPER ICS ---------------------------------------------------- */
+function makeIcsBlob() {
   const pad = (n) => String(n).padStart(2, '0')
   const fmt = (d) =>
     `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(
@@ -100,7 +96,7 @@ const createIcsUrl = () => {
     )}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`
 
   const start = new Date(evento.startISO)
-  const end = new Date(evento.endISO)
+  const end   = new Date(evento.endISO)
 
   const ics = `BEGIN:VCALENDAR
 VERSION:2.0
@@ -112,45 +108,49 @@ LOCATION:${evento.luogo}
 END:VEVENT
 END:VCALENDAR`
 
-  return URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }))
+  return new Blob([ics], { type: 'text/calendar' })
 }
 
 /* COMPONENTE --------------------------------------------------- */
 export default function EnotempoPage() {
-  /* carousel */
+  /* carosello */
   const [idx, setIdx] = useState(0)
   const prev = () => setIdx((i) => (i - 1 + slides.length) % slides.length)
   const next = () => setIdx((i) => (i + 1) % slides.length)
 
-  /* auto-play */
+  /* autoplay */
   useEffect(() => {
     const t = setInterval(next, 6500)
     return () => clearInterval(t)
   }, [])
 
-  /* lingua IT / ES */
+  /* lingua */
   const [lang, setLang] = useState('it')
   const t = testi[lang]
 
-  /* formattazione data/orario  */
+  /* ics url */
+  const [icsUrl, setIcsUrl] = useState(null)
+  useEffect(() => {
+    const blob = makeIcsBlob()
+    const url = URL.createObjectURL(blob)
+    setIcsUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [])
+
+  /* data e orario */
   const start = new Date(evento.startISO)
-  const end = new Date(evento.endISO)
-  const dateFmt = start.toLocaleDateString(lang === 'it' ? 'it-IT' : 'es-ES', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-  const timeFmt = `${start
-    .toLocaleTimeString('it-IT', {
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-    .replace('.', ':')} – ${end
-    .toLocaleTimeString('it-IT', {
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-    .replace('.', ':')}`
+  const end   = new Date(evento.endISO)
+  const dateFmt = start.toLocaleDateString(
+    lang === 'it' ? 'it-IT' : 'es-ES',
+    { day: 'numeric', month: 'long', year: 'numeric' }
+  )
+  const timeFmt = `${start.toLocaleTimeString('it-IT', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })} – ${end.toLocaleTimeString('it-IT', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`
 
   return (
     <>
@@ -163,8 +163,8 @@ export default function EnotempoPage() {
       </Head>
 
       <article className="mx-auto max-w-6xl px-6 py-16 space-y-16">
-        {/* CAROSELLO ---------------------------------------------------- */}
-        <div className="relative aspect-video rounded-2xl overflow-hidden shadow-lg">
+        {/* CAROSELLO */}
+        <div className="relative aspect-video overflow-hidden rounded-2xl shadow-lg">
           <Image
             src={slides[idx]}
             alt={`Slide ${idx + 1}`}
@@ -174,80 +174,70 @@ export default function EnotempoPage() {
           />
           <button
             onClick={prev}
-            className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-md p-2 rounded-full shadow"
+            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/70 p-2 backdrop-blur-md shadow"
             aria-label="slide precedente"
           >
             <ChevronLeft />
           </button>
           <button
             onClick={next}
-            className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/70 backdrop-blur-md p-2 rounded-full shadow"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/70 p-2 backdrop-blur-md shadow"
             aria-label="slide successiva"
           >
             <ChevronRight />
           </button>
         </div>
 
-        {/* HEADER & CTA ------------------------------------------------ */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-8">
+        {/* HEADER + CTA */}
+        <div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-secondary">
+            <h1 className="text-3xl font-extrabold sm:text-4xl text-secondary">
               {evento.titolo}
             </h1>
-            <p className="text-secondary/80 mt-1 italic">
+            <p className="mt-1 italic text-secondary/80">
               {dateFmt} · {timeFmt} · {evento.luogo}
             </p>
           </div>
 
           <div className="flex items-center gap-4">
-            {/* toggle lingua */}
             <button
               onClick={() => setLang(lang === 'it' ? 'es' : 'it')}
-              className="rounded-full border px-4 py-2 text-sm font-semibold flex items-center gap-2 hover:bg-primary/10"
+              className="flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-primary/10"
             >
-              <Flag className="w-4 h-4" />
+              <Flag className="h-4 w-4" />
               {lang === 'it' ? 'ES' : 'IT'}
             </button>
 
-            {/* ics */}
-            <Link
-              href={createIcsUrl()}
-              download="enotempo.ics"
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 font-semibold text-white shadow hover:bg-primary/90"
-            >
-              <CalendarPlus size={18} />
-              {lang === 'it' ? 'Aggiungi al calendario' : 'Guardar en calendario'}
-            </Link>
+            {icsUrl && (
+              <a
+                href={icsUrl}
+                download="enotempo.ics"
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2 font-semibold text-white shadow hover:bg-primary/90"
+              >
+                <CalendarPlus size={18} />{' '}
+                {lang === 'it' ? 'Aggiungi al calendario' : 'Añadir al calendario'}
+              </a>
+            )}
           </div>
         </div>
 
-        {/* TESTI ------------------------------------------------------- */}
-        <section className="space-y-10 text-secondary leading-relaxed">
-          {/* Chi siamo */}
+        {/* PARAGRAFI */}
+        <section className="space-y-10 leading-relaxed text-secondary">
           <div className="space-y-4">
-            <h2 className="text-2xl font-semibold italic">
-              {lang === 'it' ? 'Chi Siamo' : 'Quiénes Somos'}
+            <h2 className="text-2xl italic font-semibold">
+              {lang === 'it' ? 'Chi siamo' : 'Quiénes somos'}
             </h2>
-            <p
-              className="prose max-w-none"
-              dangerouslySetInnerHTML={{ __html: t.chi }}
-            />
+            <p className="prose max-w-none" dangerouslySetInnerHTML={{ __html: t.chi }} />
           </div>
 
-          {/* SOLO ESPAÑOL: misión / visión / valores */}
           {lang === 'es' && (
-            <div className="space-y-10">
-              <p
-                className="prose"
-                dangerouslySetInnerHTML={{ __html: t.mision }}
-              />
-              <p
-                className="prose"
-                dangerouslySetInnerHTML={{ __html: t.vision }}
-              />
+            <div className="space-y-8">
+              <p className="prose" dangerouslySetInnerHTML={{ __html: t.mision }} />
+              <p className="prose" dangerouslySetInnerHTML={{ __html: t.vision }} />
+
               <div>
-                <h3 className="font-semibold mb-2">Valores</h3>
-                <ul className="list-disc pl-6 space-y-1">
+                <h3 className="mb-2 font-semibold">Valores</h3>
+                <ul className="list-disc space-y-1 pl-6">
                   {t.valores.map((v) => (
                     <li key={v}>{v}</li>
                   ))}
@@ -257,27 +247,30 @@ export default function EnotempoPage() {
           )}
         </section>
 
-        {/* MENU CARD --------------------------------------------------- */}
-        <div className="bg-[#faf7f1] rounded-xl shadow-inner p-8 space-y-6">
-          <h2 className="text-2xl font-semibold italic mb-2">
-            Menú &ldquo;Tullpukuna&rdquo; · Gluten-free
+        {/* MENU */}
+        <div className="rounded-xl bg-[#faf7f1] p-8 shadow-inner space-y-6">
+          <h2 className="mb-2 text-2xl italic font-semibold">
+            Menú “Tullpukuna” · Gluten-free
           </h2>
 
           <ul className="space-y-4">
-            {menu[lang].map((piatto, i) => (
+            {menu[lang].map((p, i) => (
               <li key={i} className="space-y-1">
-                <p className="font-semibold">{piatto.titolo}</p>
-                <p className="text-secondary/90">{piatto.descr}</p>
+                <p className="font-semibold">{p.titolo}</p>
+                <p className="text-secondary/90">{p.descr}</p>
               </li>
             ))}
           </ul>
 
           <p className="mt-6 font-medium">
-            Ticket: 80 € · {lang === 'it' ? 'Vini italiani in abbinamento' : 'Maridaje con vinos italianos'}
+            Ticket: 80 € ·{' '}
+            {lang === 'it'
+              ? 'Vini italiani d’eccellenza in abbinamento'
+              : 'Maridaje con vinos italianos de excelencia'}
           </p>
         </div>
 
-        {/* BACK LINK --------------------------------------------------- */}
+        {/* BACK */}
         <div className="pt-10">
           <Link href="/progetti" className="text-primary hover:underline">
             ← {lang === 'it' ? 'Torna ai progetti' : 'Volver a proyectos'}
