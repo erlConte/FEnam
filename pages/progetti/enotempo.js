@@ -19,11 +19,10 @@ const slides = Array.from({ length: 8 }, (_, i) =>
 /* --------------- DATI EVENTO ----------- */
 const evento = {
   titolo   : 'ENOTEMPO · Wine & Culture Experience',
-  luogo    : 'Roma – Auditorium (TBD)',
-  startISO : '2025-10-03T19:30:00',
-  endISO   : '2025-10-03T23:00:00',
+  luogo    : 'Ristorante Tullpukuna — Piazza Dante 5, 00185 Roma (RM)',
+  startISO : '2025-07-31T20:00:00',
+  endISO   : '2025-07-31T23:30:00',
 }
-
 /* --------------- CONTATTO -------------- */
 const contatto = {
   tel : '+39 351 313 1624',
@@ -176,7 +175,7 @@ export default function EnotempoPage() {
     return ()=> URL.revokeObjectURL(u)
   },[])
 
-  /* data / orario */
+    /* data / orario */
   const s = new Date(evento.startISO)
   const e = new Date(evento.endISO)
   const dateFmt = s.toLocaleDateString(lang==='it'?'it-IT':'es-ES',{day:'numeric',month:'long',year:'numeric'})
@@ -218,8 +217,8 @@ export default function EnotempoPage() {
         {/* ---------- POSTI LIMITATI / INFO ---------- */}
         <div className="rounded-lg bg-primary/10 p-4 text-center font-semibold text-primary">
           {lang==='it'
-            ? '🎉 Posti limitati — affrettati a prenotare!'
-            : '🎉 Plazas limitadas — ¡reserva cuanto antes!'}
+            ? 'Posti limitati — affrettati a prenotare!'
+            : 'Plazas limitadas — ¡reserva cuanto antes!'}
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 rounded-xl border p-6 shadow-md">
