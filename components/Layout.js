@@ -1,7 +1,6 @@
 // components/Layout.js
 import Navbar from './Navbar'
 import Footer from './Footer'
-import { Analytics } from '@vercel/analytics/react'
 
 export default function Layout({ children }) {
     return (
@@ -17,9 +16,6 @@ export default function Layout({ children }) {
         </main>
   
         <Footer />
-        
-        {/* Analytics di Vercel */}
-      <Analytics />
       </div>
     )
   }

@@ -19,9 +19,9 @@ const slides = Array.from({ length: 8 }, (_, i) =>
 /* --------------- DATI EVENTO ----------- */
 const evento = {
   titolo   : 'ENOTEMPO · Wine & Culture Experience',
-  luogo    : 'Ristorante Tullpukuna — Piazza Dante 5, 00185 Roma (RM)',
-  startISO : '2025-07-31T20:00:00',
-  endISO   : '2025-07-31T23:30:00',
+  luogo    : 'Ristorante Tullpukuna, Piazza Dante 5, 00185 Roma RM',
+  startISO : '2025-07-31T20:00:00+02:00', // 31/07 ore 20:00 (CEST)
+  endISO   : '2025-07-31T23:30:00+02:00',
 }
 /* --------------- CONTATTO -------------- */
 const contatto = {
@@ -138,21 +138,42 @@ Puré de maíz morado / Piña &amp; fresas al horno / Canela / Merengue / Pistac
 
 /* --------------- ICS ------------------- */
 function makeIcsUrl() {
+  // Funzione solo lato client (URL.createObjectURL non esiste in SSR)
+  if (typeof window === 'undefined') return null
+  
   const pad = n => String(n).padStart(2, '0')
-  const fmt = d =>
-    `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`
+  
+  // Converti date ISO in formato ICS (YYYYMMDDTHHmmss)
+  const fmt = (d) => {
+    const year = d.getFullYear()
+    const month = pad(d.getMonth() + 1)
+    const day = pad(d.getDate())
+    const hours = pad(d.getHours())
+    const minutes = pad(d.getMinutes())
+    return `${year}${month}${day}T${hours}${minutes}00`
+  }
+  
   const s = new Date(evento.startISO)
   const e = new Date(evento.endISO)
+  
+  // Escape caratteri speciali per ICS
+  const escapeIcs = (str) => str.replace(/[,;\\]/g, '\\$&')
+  
   const ics = `BEGIN:VCALENDAR
 VERSION:2.0
+PRODID:-//FENAM//ENOTEMPO//IT
 BEGIN:VEVENT
-SUMMARY:${evento.titolo}
+UID:enotempo-2025-07-31@fenam.it
+DTSTAMP:${fmt(new Date())}
 DTSTART:${fmt(s)}
 DTEND:${fmt(e)}
-LOCATION:${evento.luogo}
+SUMMARY:${escapeIcs(evento.titolo)}
+LOCATION:${escapeIcs(evento.luogo)}
+DESCRIPTION:ENOTEMPO · Wine & Culture Experience\\nRistorante Tullpukuna, Piazza Dante 5, 00185 Roma RM
 END:VEVENT
 END:VCALENDAR`
-  return URL.createObjectURL(new Blob([ics],{type:'text/calendar'}))
+  
+  return URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }))
 }
 
 /* =============== COMPONENTE =============== */
@@ -167,19 +188,30 @@ export default function EnotempoPage() {
   const [lang,setLang]=useState('it')
   const t = testi[lang]
 
-  /* ics */
-  const [icsUrl,setIcsUrl] = useState(null)
-  useEffect(()=>{
+  /* ics - solo lato client */
+  const [icsUrl, setIcsUrl] = useState(null)
+  useEffect(() => {
+    // Assicurati che siamo lato client
+    if (typeof window === 'undefined') return
+    
     const u = makeIcsUrl()
-    setIcsUrl(u)
-    return ()=> URL.revokeObjectURL(u)
-  },[])
+    if (u) {
+      setIcsUrl(u)
+      return () => {
+        if (u) URL.revokeObjectURL(u)
+      }
+    }
+  }, [])
 
-    /* data / orario */
+  /* data / orario */
   const s = new Date(evento.startISO)
   const e = new Date(evento.endISO)
-  const dateFmt = s.toLocaleDateString(lang==='it'?'it-IT':'es-ES',{day:'numeric',month:'long',year:'numeric'})
-  const timeFmt = `${s.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})} – ${e.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`
+  const dateFmt = s.toLocaleDateString(lang === 'it' ? 'it-IT' : 'es-ES', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  })
+  const timeFmt = `${s.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} – ${e.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`
 
   return (
     <>
