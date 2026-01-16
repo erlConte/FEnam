@@ -1,9 +1,13 @@
 import { z } from 'zod'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { Resend } from 'resend'
+import { rateLimit } from '../../lib/rateLimit'
 
-const prisma = new PrismaClient()
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Inizializza Resend opzionalmente (non blocca startup se manca)
+let resend = null
+if (process.env.RESEND_API_KEY && process.env.SENDER_EMAIL) {
+  resend = new Resend(process.env.RESEND_API_KEY)
+}
 
 const confirmSchema = z.object({
   token: z.string(),
@@ -12,6 +16,30 @@ const confirmSchema = z.object({
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' })
+  }
+
+  // Rate limiting: 10 richieste/minuto per IP
+  const allowed = await rateLimit(req, res)
+  if (!allowed) {
+    return // rateLimit ha già inviato la risposta 429
+  }
+
+  // Verifica Resend configurato
+  if (!resend) {
+    console.error('❌ [Confirm] RESEND_API_KEY o SENDER_EMAIL non configurati')
+    return res.status(503).json({
+      ok: false,
+      error: 'Servizio email non disponibile. Contatta il supporto.',
+    })
+  }
+
+  // Verifica RESEND_AUDIENCE_ID (richiesto per contacts.create)
+  if (!process.env.RESEND_AUDIENCE_ID) {
+    console.error('❌ [Confirm] RESEND_AUDIENCE_ID non configurato')
+    return res.status(503).json({
+      ok: false,
+      error: 'Servizio email non configurato correttamente. Contatta il supporto.',
+    })
   }
 
   const parse = confirmSchema.safeParse(req.query)

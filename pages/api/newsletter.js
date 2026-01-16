@@ -1,11 +1,15 @@
 // pages/api/newsletter.js
 import { z } from 'zod'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import { Resend } from 'resend'
 import crypto from 'crypto'
+import { rateLimit } from '../../lib/rateLimit'
 
-const prisma = new PrismaClient()
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Inizializza Resend opzionalmente (non blocca startup se manca)
+let resend = null
+if (process.env.RESEND_API_KEY && process.env.SENDER_EMAIL) {
+  resend = new Resend(process.env.RESEND_API_KEY)
+}
 
 // Schema di validazione per email + consenso
 const subscribeSchema = z.object({
@@ -16,6 +20,21 @@ const subscribeSchema = z.object({
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Metodo non consentito' })
+  }
+
+  // Rate limiting: 10 richieste/minuto per IP
+  const allowed = await rateLimit(req, res)
+  if (!allowed) {
+    return // rateLimit ha già inviato la risposta 429
+  }
+
+  // Verifica Resend configurato
+  if (!resend) {
+    console.error('❌ [Newsletter] RESEND_API_KEY o SENDER_EMAIL non configurati')
+    return res.status(503).json({
+      ok: false,
+      error: 'Servizio email non disponibile. Contatta il supporto.',
+    })
   }
 
   // 1) Validazione input
@@ -37,7 +56,11 @@ export default async function handler(req, res) {
     })
 
     // 4) Costruisco link di conferma
-    const baseUrl     = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    if (!baseUrl) {
+      console.error('NEXT_PUBLIC_BASE_URL is missing')
+      return res.status(500).json({ ok: false, error: 'Configurazione server errata' })
+    }
     const confirmUrl  = `${baseUrl}/newsletter/confirm?token=${token}`
 
     // 5) Invio email di conferma

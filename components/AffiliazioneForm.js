@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'react-toastify'
+import { useRouter } from 'next/router'
 import 'react-toastify/dist/ReactToastify.css'
 
 const schema = z.object({
@@ -17,6 +18,7 @@ const schema = z.object({
 export default function AffiliazioneForm() {
   const [sdkReady, setSdkReady] = useState(false)
   const paypalRef = useRef(null)
+  const router = useRouter()
 
   const {
     register,
@@ -27,9 +29,21 @@ export default function AffiliazioneForm() {
   /* carica SDK PayPal una sola volta */
   useEffect(() => {
     if (window.paypal) return setSdkReady(true)
+    
+    const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+    if (!clientId) {
+      console.error('NEXT_PUBLIC_PAYPAL_CLIENT_ID is missing')
+      toast.error('Configurazione PayPal mancante')
+      return
+    }
+    
     const s = document.createElement('script')
-    s.src = `https://www.paypal.com/sdk/js?client-id=${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID}&currency=EUR`
+    s.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=EUR`
     s.onload = () => setSdkReady(true)
+    s.onerror = () => {
+      console.error('Failed to load PayPal SDK')
+      toast.error('Errore caricamento PayPal')
+    }
     document.body.appendChild(s)
   }, [])
 
@@ -53,8 +67,41 @@ export default function AffiliazioneForm() {
         return json.orderID
       },
 
-      onApprove: () => toast.success('Pagamento completato!'),
-      onError:   () => toast.error('Errore PayPal'),
+      onApprove: async (data) => {
+        try {
+          // Chiama API capture server-side
+          const res = await fetch('/api/affiliazione/capture', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderID: data.orderID }),
+          })
+
+          const json = await res.json()
+
+          if (!res.ok) {
+            // Errore nella capture
+            const errorMsg = json.error || json.details || 'Errore durante la conferma del pagamento'
+            toast.error(errorMsg)
+            console.error('Errore capture:', json)
+            return
+          }
+
+          // Successo
+          toast.success('Affiliazione completata!')
+          
+          // Redirect opzionale a pagina successo
+          setTimeout(() => {
+            router.push(`/affiliazione/success?orderId=${data.orderID}`)
+          }, 1500)
+        } catch (err) {
+          console.error('Errore durante capture:', err)
+          toast.error('Errore durante la conferma del pagamento')
+        }
+      },
+      onError: (err) => {
+        console.error('Errore PayPal:', err)
+        toast.error('Errore PayPal')
+      },
     }).render(paypalRef.current)
   }, [sdkReady])
 

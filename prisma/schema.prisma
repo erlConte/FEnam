@@ -29,13 +29,19 @@ model ContactMessage {
 }
 
 model Affiliation {
-  id         String   @id @default(cuid())
-  nome       String
-  cognome    String
-  email      String
-  telefono   String
-  privacy    Boolean
-  orderId    String?  @unique
-  status     String   @default("pending")
-  createdAt  DateTime @default(now())
+  id                     String    @id @default(cuid())
+  nome                   String
+  cognome                String
+  email                  String
+  telefono               String
+  privacy                Boolean
+  orderId                String?   @unique
+  status                 String    @default("pending")
+  payerEmail             String?
+  confirmationEmailSentAt DateTime?
+  memberSince            DateTime?
+  memberUntil            DateTime?
+  memberNumber           String?   @unique
+  membershipCardSentAt   DateTime?
+  createdAt              DateTime  @default(now())
 }

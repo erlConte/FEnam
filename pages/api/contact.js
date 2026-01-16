@@ -1,9 +1,8 @@
 // pages/api/contact.js
 import { z } from 'zod'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../../lib/prisma'
 import nodemailer from 'nodemailer'
-
-const prisma = new PrismaClient()
+import { rateLimit } from '../../lib/rateLimit'
 
 // 1) Schema di validazione
 const contactSchema = z.object({
@@ -17,6 +16,12 @@ const contactSchema = z.object({
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Metodo non consentito' })
+  }
+
+  // Rate limiting: 10 richieste/minuto per IP
+  const allowed = await rateLimit(req, res)
+  if (!allowed) {
+    return // rateLimit ha già inviato la risposta 429
   }
 
   // 2) Validazione server-side

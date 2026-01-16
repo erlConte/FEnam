@@ -1,11 +1,13 @@
 -- CreateTable
 CREATE TABLE "NewsletterSubscription" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "token" TEXT NOT NULL,
-    "expiresAt" DATETIME NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
     "confirmed" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "NewsletterSubscription_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
