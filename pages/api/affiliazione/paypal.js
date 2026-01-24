@@ -88,22 +88,28 @@ export default async function handler(req, res) {
 
   const { nome, cognome, email, telefono, privacy, donazione } = parseResult.data
 
-  // 2) Calcolo importo
-  const quotaBase = 85
-  const extra = donazione || 0
-  const total = Math.round((quotaBase + extra) * 100) / 100 // rounding a 2 decimali
+  // 2) Verifica che donazione sia > 0 (altrimenti usa endpoint gratuito)
+  if (!donazione || donazione <= 0) {
+    return res.status(400).json({
+      error: 'Donazione pari a 0: usa /api/affiliazione/free',
+      details: [{ path: ['donazione'], message: 'Per affiliazione gratuita (donazione = 0), usa /api/affiliazione/free' }],
+    })
+  }
+
+  // 3) Calcolo importo (solo donazione, quota base rimossa)
+  const total = Math.round(donazione * 100) / 100 // rounding a 2 decimali
 
   // Validazione total
   if (total <= 0) {
     return res.status(400).json({
       error: 'Importo totale non valido',
-      details: [{ path: ['total'], message: 'L\'importo totale deve essere maggiore di 0' }],
+      details: [{ path: ['donazione'], message: 'La donazione deve essere maggiore di 0' }],
     })
   }
-  if (total > 10085) {
+  if (total > 10000) {
     return res.status(400).json({
       error: 'Importo totale troppo elevato',
-      details: [{ path: ['total'], message: 'L\'importo totale non può superare €10.085' }],
+      details: [{ path: ['donazione'], message: 'La donazione non può superare €10.000' }],
     })
   }
 
@@ -125,10 +131,7 @@ export default async function handler(req, res) {
             currency_code: 'EUR',
             value: totalFormatted,
           },
-          description:
-            extra > 0
-              ? `Affiliazione €85 + Donazione €${extra.toFixed(2)}`
-              : 'Affiliazione €85',
+          description: `Affiliazione gratuita + Donazione €${totalFormatted}`,
         },
       ],
     })
@@ -158,9 +161,11 @@ export default async function handler(req, res) {
         // Continua comunque, restituiamo l'orderID
       } else {
         // Altro errore DB: loggiamo ma non blocchiamo (order già creato su PayPal)
-        console.error('❌ [PayPal API] Errore DB dopo creazione order:', dbError)
-        console.error('   OrderId PayPal:', orderId)
-        console.error('   Dati utente:', { nome, cognome, email })
+        console.error('❌ [PayPal API] Errore DB dopo creazione order:', {
+          orderId,
+          error: dbError.message,
+          errorCode: dbError.code,
+        })
       }
     }
 

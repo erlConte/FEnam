@@ -9,6 +9,15 @@ export default async function handler(req, res) {
     return res.status(404).json({ error: 'Not found' })
   }
 
+  // Protezione aggiuntiva: richiedi header segreto se configurato
+  const devKey = process.env.DEV_ONLY_KEY
+  if (devKey) {
+    const providedKey = req.headers['x-dev-key']
+    if (!providedKey || providedKey !== devKey) {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
+  }
+
   // Supporta GET e HEAD
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return res.status(405).json({ error: 'Method not allowed' })

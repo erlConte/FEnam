@@ -529,43 +529,6 @@ curl -X GET "http://localhost:3000/api/admin/affiliations?token=YOUR_ADMIN_TOKEN
 - ✅ Risposta 401 se token mancante o non valido
 - ⚠️ **Nota**: Per produzione, considera autenticazione più robusta (JWT, sessioni, ecc.)
 
-## Test Tessera PDF (Solo Development)
-
-Per testare la generazione della tessera PDF senza completare un pagamento PayPal, è disponibile un endpoint di test:
-
-### Endpoint Test
-
-**⚠️ Disponibile solo in `NODE_ENV=development`**
-
-```powershell
-# Genera e scarica PDF tessera di test (Windows PowerShell)
-curl.exe -X GET "http://localhost:3000/api/dev/test-card" -OutFile tessera_test.pdf
-
-# Oppure con Invoke-WebRequest
-Invoke-WebRequest -Uri "http://localhost:3000/api/dev/test-card" -OutFile tessera_test.pdf
-```
-
-Oppure apri nel browser:
-```
-http://localhost:3000/api/dev/test-card
-```
-
-### Dati di Test
-
-L'endpoint genera un PDF con dati di esempio:
-- **Nome**: Mario
-- **Cognome**: Rossi
-- **Numero tessera**: FENAM-2026-TEST01
-- **Date**: Data corrente e +1 anno
-
-### Note
-
-- L'endpoint è **disabilitato in produzione** (ritorna 404)
-- Supporta sia **GET** che **HEAD** (HEAD ritorna solo header senza body)
-- Il PDF generato è identico a quello inviato via email dopo il capture PayPal
-- La tessera è in **formato card** (85.6mm x 54mm) ottimizzato per stampa su carta di credito
-- Utile per verificare layout, QR code e formattazione senza dover completare un pagamento reale
-
 ## Test End-to-End
 
 Questa sezione descrive come testare il flusso completo di affiliazione, dalla creazione dell'ordine PayPal al download della tessera PDF.
@@ -680,13 +643,10 @@ $verifyResponse | ConvertTo-Json
 http://localhost:3000/verifica?memberNumber=FENAM-2026-XXXXXX
 ```
 
-#### 4. Download Tessera Test (Solo Development)
+#### 4. Verifica Tessera Generata
 
 ```powershell
-# Genera tessera PDF di test (GET /api/dev/test-card)
-curl.exe -X GET "http://localhost:3000/api/dev/test-card" -OutFile tessera_test.pdf
-
-# Verifica PDF generato
+# Verifica tessera tramite API
 if (Test-Path tessera_test.pdf) {
     Write-Host "✅ PDF generato correttamente"
     # Apri PDF
@@ -819,7 +779,6 @@ Write-Host "Tessera reinviata a: $($resendResponse.email)"
 **Tessera PDF non generata:**
 - Verifica che `memberNumber` sia presente dopo il capture
 - Controlla i log per errori nella generazione PDF
-- Testa endpoint `/api/dev/test-card` per verificare la generazione PDF
 
 ---
 
