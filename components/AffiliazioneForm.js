@@ -12,14 +12,21 @@ const schema = z.object({
   email:    z.string().email('Email non valida'),
   telefono: z.string().min(5, 'Obbligatorio'),
   privacy:  z.boolean().refine(Boolean, { message: 'Richiesto' }),
-  donazione:z.string().optional(), // testo, convertirai a numero
+  donazione: z
+    .union([z.string(), z.number()])
+    .transform((val) => {
+      if (val === undefined || val === null || val === '') return 10
+      const num = typeof val === 'string' ? parseFloat(val) : val
+      return isNaN(num) ? 10 : Math.max(10, num)
+    })
+    .pipe(z.number().min(10, 'La donazione minima è €10')),
 })
 
-// Converte donazione da string a numero (vuoto -> 0)
+// Converte donazione da string a numero (vuoto -> 10, default)
 function parseDonazione(donazione) {
-  if (!donazione || donazione === '') return 0
+  if (!donazione || donazione === '') return 10
   const num = parseFloat(donazione)
-  return isNaN(num) ? 0 : Math.max(0, num)
+  return isNaN(num) ? 10 : Math.max(10, num)
 }
 
 export default function AffiliazioneForm() {
@@ -47,17 +54,19 @@ export default function AffiliazioneForm() {
     formState: { errors },
     getValues,
     watch,
-  } = useForm({ resolver: zodResolver(schema) })
+  } = useForm({ 
+    resolver: zodResolver(schema),
+    defaultValues: {
+      donazione: '10'
+    }
+  })
 
-  // Watch donazione per decidere quale bottone mostrare
+  // Watch donazione
   const donazioneValue = watch('donazione')
   const donazioneNum = parseDonazione(donazioneValue)
 
-  /* carica SDK PayPal una sola volta (solo se necessario) */
+  /* carica SDK PayPal una sola volta */
   useEffect(() => {
-    // Carica PayPal SDK solo se donazione > 0
-    if (donazioneNum <= 0) return
-    
     if (window.paypal) return setSdkReady(true)
     
     const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
@@ -75,15 +84,11 @@ export default function AffiliazioneForm() {
       toast.error('Errore caricamento PayPal')
     }
     document.body.appendChild(s)
-  }, [donazioneNum])
+  }, [])
 
-  /* render bottone PayPal (solo se donazione > 0) */
+  /* render bottone PayPal */
   useEffect(() => {
-    if (donazioneNum <= 0 || !sdkReady || !paypalRef.current) {
-      // Pulisci contenuto se non serve PayPal
-      if (paypalRef.current) {
-        paypalRef.current.innerHTML = ''
-      }
+    if (!sdkReady || !paypalRef.current) {
       return
     }
 
@@ -145,7 +150,7 @@ export default function AffiliazioneForm() {
     }).render(paypalRef.current)
   }, [sdkReady, donazioneNum]) // getValues è stabile, non serve nelle dipendenze
 
-  // Funzione condivisa per gestire redirect dopo successo (gratuito o PayPal)
+  // Funzione per gestire redirect dopo successo
   const handleSuccessRedirect = async (orderID) => {
     // Usa ref per accedere ai parametri handoff in modo stabile
     const params = handoffParamsRef.current
@@ -184,56 +189,6 @@ export default function AffiliazioneForm() {
     }, 1500)
   }
 
-  // Handler per affiliazione gratuita
-  const handleFreeAffiliation = async (e) => {
-    e.preventDefault()
-    
-    if (isSubmitting) return
-    
-    const formData = getValues()
-    const donazioneNum = parseDonazione(formData.donazione)
-    
-    // Verifica che donazione sia <= 0
-    if (donazioneNum > 0) {
-      toast.error('Per donazioni > 0, usa il bottone PayPal')
-      return
-    }
-
-    setIsSubmitting(true)
-    
-    try {
-      const payload = {
-        ...formData,
-        donazione: 0, // Forza a 0 per sicurezza
-      }
-
-      const res = await fetch('/api/affiliazione/free', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      const json = await res.json()
-
-      if (!res.ok) {
-        const errorMsg = json.error || json.details || 'Errore durante la creazione dell\'affiliazione'
-        toast.error(errorMsg)
-        console.error('Errore affiliazione gratuita:', json)
-        return
-      }
-
-      toast.success('Affiliazione completata!')
-      
-      // Usa stessa logica di redirect del flusso PayPal
-      await handleSuccessRedirect(json.orderID)
-    } catch (err) {
-      console.error('Errore durante affiliazione gratuita:', err)
-      toast.error('Errore durante la creazione dell\'affiliazione')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
   return (
     <form onSubmit={(e) => e.preventDefault()}
           className="form-col space-y-6 rounded-3xl bg-[#8fd1d2] p-8 text-secondary">
@@ -248,15 +203,15 @@ export default function AffiliazioneForm() {
         </div>
       ))}
 
-      {/* Importo donazione facoltativo */}
+      {/* Donazione obbligatoria */}
       <div>
-        <label className="mb-1 block text-sm">Donazione extra (facoltativa)</label>
+        <label className="mb-1 block text-sm">Donazione (€)</label>
         <input
           {...register('donazione')}
           type="number"
-          step="0.01"
-          min="0"
-          placeholder="0.00"
+          step="1"
+          min="10"
+          defaultValue="10"
           className="input-field"
         />
         {errors.donazione && (
@@ -270,22 +225,8 @@ export default function AffiliazioneForm() {
       </label>
       {errors.privacy && <p className="mt-1 text-xs text-red-600">{errors.privacy.message}</p>}
 
-      {/* Messaggio informativo */}
-      <p className="pt-4 text-center text-sm">Affiliazione gratuita — donazione facoltativa</p>
-
-      {/* Bottone gratuito o PayPal in base a donazione */}
-      {donazioneNum <= 0 ? (
-        <button
-          type="button"
-          onClick={handleFreeAffiliation}
-          disabled={isSubmitting}
-          className="w-full rounded-lg bg-[#12A969] px-6 py-3 text-white font-semibold hover:bg-[#0f8a55] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isSubmitting ? 'Elaborazione...' : 'Conferma affiliazione gratuita'}
-        </button>
-      ) : (
-        <div ref={paypalRef} className="w-full" />
-      )}
+      {/* Bottone PayPal */}
+      <div ref={paypalRef} className="w-full" />
     </form>
   )
 }

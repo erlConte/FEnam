@@ -52,11 +52,11 @@ const affiliationSchema = z.object({
     .union([z.string(), z.number()])
     .optional()
     .transform((val) => {
-      if (val === undefined || val === null || val === '') return 0
+      if (val === undefined || val === null || val === '') return 10
       const num = typeof val === 'string' ? parseFloat(val) : val
-      return isNaN(num) ? 0 : Math.max(0, num)
+      return isNaN(num) ? 10 : Math.max(10, num)
     })
-    .pipe(z.number().min(0).max(10000, 'Donazione massima €10.000')),
+    .pipe(z.number().min(10, 'La donazione minima è €10').max(10000, 'Donazione massima €10.000')),
 })
 
 export default async function handler(req, res) {
@@ -91,10 +91,10 @@ export default async function handler(req, res) {
 
   const { nome, cognome, email, telefono, privacy, donazione } = parseResult.data
 
-  // Verifica che donazione sia > 0 (altrimenti usa endpoint gratuito)
-  if (!donazione || donazione <= 0) {
-    return sendError(res, 400, 'Invalid donation', 'Per affiliazione gratuita (donazione = 0), usa /api/affiliazione/free', [
-      { path: ['donazione'], message: 'Per affiliazione gratuita (donazione = 0), usa /api/affiliazione/free' }
+  // Verifica che donazione sia >= 10
+  if (!donazione || donazione < 10) {
+    return sendError(res, 400, 'Invalid donation', 'La donazione minima è €10', [
+      { path: ['donazione'], message: 'La donazione minima è €10' }
     ])
   }
 
@@ -102,9 +102,9 @@ export default async function handler(req, res) {
   const total = Math.round(donazione * 100) / 100 // rounding a 2 decimali
 
   // Validazione total
-  if (total <= 0) {
-    return sendError(res, 400, 'Invalid amount', 'La donazione deve essere maggiore di 0', [
-      { path: ['donazione'], message: 'La donazione deve essere maggiore di 0' }
+  if (total < 10) {
+    return sendError(res, 400, 'Invalid amount', 'La donazione minima è €10', [
+      { path: ['donazione'], message: 'La donazione minima è €10' }
     ])
   }
   if (total > 10000) {
@@ -131,7 +131,7 @@ export default async function handler(req, res) {
             currency_code: 'EUR',
             value: totalFormatted,
           },
-          description: `Affiliazione gratuita + Donazione €${totalFormatted}`,
+          description: `Affiliazione + Donazione €${totalFormatted}`,
         },
       ],
     })
