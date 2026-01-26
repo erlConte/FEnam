@@ -216,6 +216,17 @@ Poi modifica `.env` con i tuoi valori:
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/fenam?schema=public"
 # oppure
 # DATABASE_URL="prisma://accelerate.prisma-data.net/?api_key=YOUR_KEY"
+```
+
+## Deploy Produzione (Vercel + Supabase)
+
+**Configurazione ENV in Vercel Dashboard**:
+- `DATABASE_URL`: Session pooler Supabase (`pgbouncer=true&connection_limit=1`)
+- `SKIP_MIGRATIONS=true`: Strategia B (migrazioni manuali via Supabase SQL Editor)
+- `NEXT_PUBLIC_BASE_URL=https://fenam.website`
+- PayPal LIVE credentials, Resend API, Admin token, Handoff secret
+
+**Build**: `prisma generate && npm run migrate:deploy && next build` (migrazioni skip se `SKIP_MIGRATIONS=true`)
 
 # PayPal (Sandbox per dev, Live per produzione)
 PAYPAL_CLIENT_ID=your_paypal_client_id

@@ -2,25 +2,24 @@
 // Endpoint di test per generare PDF tessera (solo in development)
 
 import { generateMembershipCardPdf } from '../../../lib/membershipCardPdf'
+import { requireDev, checkMethod, sendError } from '../../../lib/apiHelpers'
+import { handleCors } from '../../../lib/cors'
+import { logger } from '../../../lib/logger'
 
 export default async function handler(req, res) {
-  // Solo in development
-  if (process.env.NODE_ENV !== 'development') {
-    return res.status(404).json({ error: 'Not found' })
+  // Gestione CORS
+  if (handleCors(req, res)) {
+    return
   }
 
-  // Protezione aggiuntiva: richiedi header segreto se configurato
-  const devKey = process.env.DEV_ONLY_KEY
-  if (devKey) {
-    const providedKey = req.headers['x-dev-key']
-    if (!providedKey || providedKey !== devKey) {
-      return res.status(403).json({ error: 'Forbidden' })
-    }
+  // Verifica metodo HTTP
+  if (!checkMethod(req, res, ['GET', 'HEAD'])) {
+    return
   }
 
-  // Supporta GET e HEAD
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    return res.status(405).json({ error: 'Method not allowed' })
+  // Protezione endpoint dev
+  if (!requireDev(req, res)) {
+    return
   }
 
   try {
@@ -51,10 +50,7 @@ export default async function handler(req, res) {
     
     res.send(pdfBuffer)
   } catch (error) {
-    console.error('❌ [Test Card] Errore generazione PDF:', error)
-    return res.status(500).json({
-      error: 'Errore generazione PDF',
-      message: error.message,
-    })
+    logger.error('[Test Card] Errore generazione PDF', error)
+    return sendError(res, 500, 'Errore generazione PDF', error.message)
   }
 }

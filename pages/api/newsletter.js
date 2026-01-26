@@ -4,6 +4,9 @@ import { prisma } from '../../lib/prisma'
 import { Resend } from 'resend'
 import crypto from 'crypto'
 import { rateLimit } from '../../lib/rateLimit'
+import { checkMethod, sendError, sendSuccess } from '../../lib/apiHelpers'
+import { handleCors } from '../../lib/cors'
+import { logger } from '../../lib/logger'
 
 // Inizializza Resend opzionalmente (non blocca startup se manca)
 let resend = null
@@ -18,8 +21,14 @@ const subscribeSchema = z.object({
 })
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ ok: false, error: 'Metodo non consentito' })
+  // Gestione CORS
+  if (handleCors(req, res)) {
+    return
+  }
+
+  // Verifica metodo HTTP
+  if (!checkMethod(req, res, ['POST'])) {
+    return
   }
 
   // Rate limiting: 10 richieste/minuto per IP
@@ -30,40 +39,37 @@ export default async function handler(req, res) {
 
   // Verifica Resend configurato
   if (!resend) {
-    console.error('❌ [Newsletter] RESEND_API_KEY o SENDER_EMAIL non configurati')
-    return res.status(503).json({
-      ok: false,
-      error: 'Servizio email non disponibile. Contatta il supporto.',
-    })
+    logger.error('[Newsletter] RESEND_API_KEY o SENDER_EMAIL non configurati')
+    return sendError(res, 503, 'Service unavailable', 'Servizio email non disponibile. Contatta il supporto.')
   }
 
-  // 1) Validazione input
+  // Validazione input
   const parseResult = subscribeSchema.safeParse(req.body)
   if (!parseResult.success) {
     const msg = parseResult.error.issues[0].message
-    return res.status(400).json({ ok: false, error: msg })
+    return sendError(res, 400, 'Validation error', msg)
   }
   const { email } = parseResult.data
 
-  // 2) Generazione token e scadenza (24h)
+  // Generazione token e scadenza (24h)
   const token     = crypto.randomBytes(32).toString('hex')
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
 
   try {
-    // 3) Salvo richiesta in database
+    // Salvo richiesta in database
     await prisma.newsletterSubscription.create({
       data: { email, token, expiresAt },
     })
 
-    // 4) Costruisco link di conferma
+    // Costruisco link di conferma
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
     if (!baseUrl) {
-      console.error('NEXT_PUBLIC_BASE_URL is missing')
-      return res.status(500).json({ ok: false, error: 'Configurazione server errata' })
+      logger.error('[Newsletter] NEXT_PUBLIC_BASE_URL is missing')
+      return sendError(res, 500, 'Configuration error', 'Configurazione server errata')
     }
     const confirmUrl  = `${baseUrl}/newsletter/confirm?token=${token}`
 
-    // 5) Invio email di conferma
+    // Invio email di conferma
     await resend.emails.send({
       from:    process.env.SENDER_EMAIL,
       to:      email,
@@ -71,15 +77,14 @@ export default async function handler(req, res) {
       html: `
         <p>Ciao!</p>
         <p>Grazie per esserti iscritto alla nostra newsletter.</p>
-        <p>Per completare l’iscrizione, clicca qui 👉 <a href="${confirmUrl}">Conferma la tua email</a></p>
+        <p>Per completare l'iscrizione, clicca qui 👉 <a href="${confirmUrl}">Conferma la tua email</a></p>
         <p>Il link scade in 24 ore.</p>
       `,
     })
 
-    return res.status(200).json({ ok: true })
+    return sendSuccess(res, { ok: true })
   } catch (err) {
-    console.error('❌ [newsletter] errore:', err)
-    return res.status(500).json({ ok: false, error: 'Errore interno al server' })
+    logger.error('[Newsletter] Errore', err)
+    return sendError(res, 500, 'Internal server error', 'Errore interno al server')
   }
 }
-

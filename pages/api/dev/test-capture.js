@@ -50,10 +50,24 @@ async function generateUniqueMemberNumber(maxRetries = 5) {
   )
 }
 
+import { requireDev, checkMethod, sendError, sendSuccess } from '../../../lib/apiHelpers'
+import { handleCors } from '../../../lib/cors'
+import { logger } from '../../../lib/logger'
+
 export default async function handler(req, res) {
-  // Solo in development
-  if (process.env.NODE_ENV !== 'development') {
-    return res.status(404).json({ error: 'Not found' })
+  // Gestione CORS
+  if (handleCors(req, res)) {
+    return
+  }
+
+  // Verifica metodo HTTP
+  if (!checkMethod(req, res, ['POST'])) {
+    return
+  }
+
+  // Protezione endpoint dev
+  if (!requireDev(req, res)) {
+    return
   }
 
   // Protezione aggiuntiva: richiedi header segreto se configurato
@@ -254,7 +268,7 @@ export default async function handler(req, res) {
 
         emailSent = true
         console.log(
-          `✅ [Test Capture] Email di conferma inviata a ${updatedAffiliation.email} per order ${orderID}`
+          `✅ [Test Capture] Email di conferma inviata per affiliation ${existingAffiliation.id} (order ${orderID})`
         )
       } catch (emailError) {
         console.error('❌ [Test Capture] Errore invio email:', emailError.message)
@@ -335,7 +349,7 @@ export default async function handler(req, res) {
 
         cardSent = true
         console.log(
-          `✅ [Test Capture] Tessera PDF inviata a ${updatedAffiliation.email} per order ${orderID} (memberNumber: ${updatedAffiliation.memberNumber})`
+          `✅ [Test Capture] Tessera PDF inviata per affiliation ${existingAffiliation.id} (order ${orderID}, memberNumber: ${updatedAffiliation.memberNumber})`
         )
       } catch (cardError) {
         console.error('❌ [Test Capture] Errore invio tessera PDF:', cardError.message)

@@ -6,6 +6,9 @@ import { prisma } from '../../../lib/prisma'
 import { Resend } from 'resend'
 import { generateMembershipCardPdf } from '../../../lib/membershipCardPdf'
 import { rateLimit } from '../../../lib/rateLimit'
+import { checkMethod, requireAdminAuth, sendError, sendSuccess } from '../../../lib/apiHelpers'
+import { handleCors } from '../../../lib/cors'
+import { logger } from '../../../lib/logger'
 
 // Inizializza Resend (opzionale, non blocca se manca)
 let resend = null
@@ -18,38 +21,20 @@ const resendCardSchema = z.object({
   id: z.string().min(1, 'ID obbligatorio'),
 })
 
-/**
- * Estrae token da Authorization header o query param
- */
-function getToken(req) {
-  const authHeader = req.headers.authorization
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7)
-  }
-  return req.query.token || null
-}
-
-/**
- * Verifica token admin
- */
-function verifyAdminToken(token) {
-  const adminToken = process.env.ADMIN_TOKEN
-  if (!adminToken) {
-    console.error('❌ [Admin Resend Card] ADMIN_TOKEN non configurato')
-    return false
-  }
-  return token === adminToken
-}
-
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
+  // Gestione CORS
+  if (handleCors(req, res)) {
+    return
   }
 
-  // 1) Autenticazione via token
-  const token = getToken(req)
-  if (!token || !verifyAdminToken(token)) {
-    return res.status(401).json({ error: 'Unauthorized', message: 'Token non valido' })
+  // Verifica metodo HTTP
+  if (!checkMethod(req, res, ['POST'])) {
+    return
+  }
+
+  // Autenticazione admin (solo header Authorization, non query string)
+  if (!requireAdminAuth(req, res)) {
+    return
   }
 
   // 2) Rate limiting (5 richieste/minuto per admin)
@@ -169,7 +154,7 @@ export default async function handler(req, res) {
       <p>Per qualsiasi domanda o informazione:</p>
       <ul>
         <li>Email: <a href="mailto:info@fenam.it">info@fenam.it</a></li>
-        <li>Visita il nostro sito: <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.it'}">${process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.it'}</a></li>
+        <li>Visita il nostro sito: <a href="${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}">${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}</a></li>
       </ul>
 
       <p>Cordiali saluti,<br><strong>Il team FENAM</strong></p>
@@ -200,7 +185,7 @@ Puoi stampare la tessera o conservarla sul tuo dispositivo. La tessera include u
 
 Per qualsiasi domanda o informazione:
 - Email: info@fenam.it
-- Sito web: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.it'}
+- Sito web: ${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}
 
 Cordiali saluti,
 Il team FENAM
@@ -224,22 +209,18 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
       data: { membershipCardSentAt: new Date() },
     })
 
-    // 10) Audit log (console, in produzione usare sistema di logging)
-    console.log(
-      `✅ [Admin Resend Card] Tessera reinviata per affiliation ${id} (${affiliation.memberNumber}) a ${affiliation.email}`
+    // 10) Audit log
+    logger.info(
+      `[Admin Resend Card] Tessera reinviata per affiliation ${id} (${affiliation.memberNumber})`
     )
 
-    return res.status(200).json({
+    return sendSuccess(res, {
       ok: true,
       message: 'Tessera reinviata con successo',
-      email: affiliation.email,
       memberNumber: affiliation.memberNumber,
     })
   } catch (error) {
-    console.error('❌ [Admin Resend Card] Errore:', error)
-    return res.status(500).json({
-      error: 'Internal server error',
-      message: 'Errore durante il reinvio della tessera',
-    })
+    logger.error('[Admin Resend Card] Errore', error)
+    return sendError(res, 500, 'Internal server error', 'Errore durante il reinvio della tessera')
   }
 }

@@ -2,6 +2,9 @@
 // API read-only per dashboard admin affiliazioni
 import { prisma } from '../../../lib/prisma'
 import { z } from 'zod'
+import { checkMethod, requireAdminAuth, sendError, sendSuccess } from '../../../lib/apiHelpers'
+import { handleCors } from '../../../lib/cors'
+import { logger } from '../../../lib/logger'
 
 // Schema validazione query params
 const querySchema = z.object({
@@ -26,41 +29,20 @@ const querySchema = z.object({
     .pipe(z.number().min(0)),
 })
 
-/**
- * Estrae token da Authorization header o query param
- */
-function getToken(req) {
-  // Prova Authorization header
-  const authHeader = req.headers.authorization
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7)
-  }
-
-  // Fallback su query param
-  return req.query.token || null
-}
-
-/**
- * Verifica token admin
- */
-function verifyAdminToken(token) {
-  const adminToken = process.env.ADMIN_TOKEN
-  if (!adminToken) {
-    console.error('❌ [Admin API] ADMIN_TOKEN non configurato')
-    return false
-  }
-  return token === adminToken
-}
-
 export default async function handler(req, res) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' })
+  // Gestione CORS
+  if (handleCors(req, res)) {
+    return
   }
 
-  // 1) Autenticazione via token
-  const token = getToken(req)
-  if (!token || !verifyAdminToken(token)) {
-    return res.status(401).json({ error: 'Unauthorized', message: 'Token non valido' })
+  // Verifica metodo HTTP
+  if (!checkMethod(req, res, ['GET'])) {
+    return
+  }
+
+  // Autenticazione admin (solo header Authorization, non query string)
+  if (!requireAdminAuth(req, res)) {
+    return
   }
 
   try {
@@ -161,14 +143,14 @@ export default async function handler(req, res) {
       },
     })
 
-    return res.status(200).json({
+    return sendSuccess(res, {
       items,
       total,
       take,
       skip,
     })
   } catch (error) {
-    console.error('❌ [Admin API] Errore:', error)
-    return res.status(500).json({ error: 'Internal server error' })
+    logger.error('[Admin API] Errore', error)
+    return sendError(res, 500, 'Internal server error', 'Errore durante il recupero delle affiliazioni')
   }
 }

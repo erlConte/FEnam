@@ -3,6 +3,9 @@ import { z } from 'zod'
 import { prisma } from '../../../lib/prisma'
 import { randomBytes } from 'crypto'
 import { rateLimit } from '../../../lib/rateLimit'
+import { checkMethod, sendError, sendSuccess } from '../../../lib/apiHelpers'
+import { handleCors } from '../../../lib/cors'
+import { logger } from '../../../lib/logger'
 
 // Inizializza PayPal client opzionalmente (non blocca startup se manca)
 let client = null
@@ -57,8 +60,14 @@ const affiliationSchema = z.object({
 })
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
+  // Gestione CORS
+  if (handleCors(req, res)) {
+    return
+  }
+
+  // Verifica metodo HTTP
+  if (!checkMethod(req, res, ['POST'])) {
+    return
   }
 
   // Rate limiting: 10 richieste/minuto per IP
@@ -69,48 +78,39 @@ export default async function handler(req, res) {
 
   // Verifica PayPal configurato
   if (!client) {
-    console.error('❌ [PayPal API] PAYPAL_CLIENT_ID o PAYPAL_CLIENT_SECRET non configurati')
-    return res.status(503).json({
-      error: 'Servizio pagamenti non disponibile',
-      message: 'PayPal non configurato. Contatta il supporto.',
-    })
+    logger.error('[PayPal API] PAYPAL_CLIENT_ID o PAYPAL_CLIENT_SECRET non configurati')
+    return sendError(res, 503, 'Service unavailable', 'PayPal non configurato. Contatta il supporto.')
   }
 
-  // 1) Validazione input con Zod
+  // Validazione input con Zod
   const parseResult = affiliationSchema.safeParse(req.body)
   if (!parseResult.success) {
     const firstError = parseResult.error.errors[0]
-    return res.status(400).json({
-      error: firstError.message || 'Validazione fallita',
-      details: parseResult.error.errors,
-    })
+    return sendError(res, 400, firstError.message || 'Validation error', null, parseResult.error.errors)
   }
 
   const { nome, cognome, email, telefono, privacy, donazione } = parseResult.data
 
-  // 2) Verifica che donazione sia > 0 (altrimenti usa endpoint gratuito)
+  // Verifica che donazione sia > 0 (altrimenti usa endpoint gratuito)
   if (!donazione || donazione <= 0) {
-    return res.status(400).json({
-      error: 'Donazione pari a 0: usa /api/affiliazione/free',
-      details: [{ path: ['donazione'], message: 'Per affiliazione gratuita (donazione = 0), usa /api/affiliazione/free' }],
-    })
+    return sendError(res, 400, 'Invalid donation', 'Per affiliazione gratuita (donazione = 0), usa /api/affiliazione/free', [
+      { path: ['donazione'], message: 'Per affiliazione gratuita (donazione = 0), usa /api/affiliazione/free' }
+    ])
   }
 
-  // 3) Calcolo importo (solo donazione, quota base rimossa)
+  // Calcolo importo (solo donazione, quota base rimossa)
   const total = Math.round(donazione * 100) / 100 // rounding a 2 decimali
 
   // Validazione total
   if (total <= 0) {
-    return res.status(400).json({
-      error: 'Importo totale non valido',
-      details: [{ path: ['donazione'], message: 'La donazione deve essere maggiore di 0' }],
-    })
+    return sendError(res, 400, 'Invalid amount', 'La donazione deve essere maggiore di 0', [
+      { path: ['donazione'], message: 'La donazione deve essere maggiore di 0' }
+    ])
   }
   if (total > 10000) {
-    return res.status(400).json({
-      error: 'Importo totale troppo elevato',
-      details: [{ path: ['donazione'], message: 'La donazione non può superare €10.000' }],
-    })
+    return sendError(res, 400, 'Amount too high', 'La donazione non può superare €10.000', [
+      { path: ['donazione'], message: 'La donazione non può superare €10.000' }
+    ])
   }
 
   const totalFormatted = total.toFixed(2) // string "xx.xx"
@@ -155,28 +155,20 @@ export default async function handler(req, res) {
     } catch (dbError) {
       // Gestione idempotenza: se orderId già esiste (P2002 = unique constraint violation)
       if (dbError.code === 'P2002' && dbError.meta?.target?.includes('orderId')) {
-        console.warn(
-          `⚠️ [PayPal API] OrderId ${orderId} già presente nel DB, probabilmente richiesta duplicata`
-        )
+        logger.warn(`[PayPal API] OrderId ${orderId} già presente nel DB, probabilmente richiesta duplicata`)
         // Continua comunque, restituiamo l'orderID
       } else {
         // Altro errore DB: loggiamo ma non blocchiamo (order già creato su PayPal)
-        console.error('❌ [PayPal API] Errore DB dopo creazione order:', {
-          orderId,
-          error: dbError.message,
-          errorCode: dbError.code,
-        })
+        logger.error('[PayPal API] Errore DB dopo creazione order', dbError, { orderId })
       }
     }
 
-    return res.status(200).json({ orderID: orderId })
+    return sendSuccess(res, { orderID: orderId })
   } catch (paypalError) {
     // Errore PayPal: log dettagliato (senza esporre secret)
-    console.error('❌ [PayPal API] PayPal error:', {
-      message: paypalError.message,
+    logger.error('[PayPal API] PayPal error', paypalError, {
       statusCode: paypalError.statusCode,
-      // Non loggiamo il body completo per sicurezza
     })
-    return res.status(502).json({ error: 'PayPal error' })
+    return sendError(res, 502, 'PayPal error', 'Errore durante la creazione dell\'ordine PayPal')
   }
 }

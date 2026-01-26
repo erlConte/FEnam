@@ -6,6 +6,7 @@ import { prisma } from '../../../lib/prisma'
 import { rateLimit } from '../../../lib/rateLimit'
 import { completeAffiliation } from '../../../lib/affiliation'
 import { randomBytes } from 'crypto'
+import { logger, logErrorStructured } from '../../../lib/logger'
 
 // Schema di validazione Zod
 const freeAffiliationSchema = z.object({
@@ -88,7 +89,7 @@ export default async function handler(req, res) {
 
   if (existingAffiliation && existingAffiliation.orderId) {
     // Affiliazione già esistente: ritorna orderId esistente
-    console.log(`ℹ️ [Free Affiliation] Affiliazione già esistente, ritorno orderId esistente`, {
+    logger.info('[Free Affiliation] Affiliazione già esistente, ritorno orderId esistente', {
       orderId: existingAffiliation.orderId,
     })
     return res.status(200).json({
@@ -122,7 +123,7 @@ export default async function handler(req, res) {
       currency: 'EUR',
     })
 
-    console.log(`✅ [Free Affiliation] Affiliazione gratuita completata`, {
+    logger.info('[Free Affiliation] Affiliazione gratuita completata', {
       orderId,
       memberNumber: completionResult.memberNumber,
       emailSent: completionResult.emailSent,
@@ -134,10 +135,8 @@ export default async function handler(req, res) {
       orderID: orderId,
     })
   } catch (dbError) {
-    console.error('❌ [Free Affiliation] Errore DB:', {
-      orderId,
-      error: dbError.message,
-    })
+    const category = dbError.code?.startsWith('P') ? 'PRISMA' : 'DB_CONN'
+    logErrorStructured('[Free Affiliation]', dbError, { orderId }, category)
     return res.status(500).json({
       error: 'Errore durante la creazione dell\'affiliazione',
     })

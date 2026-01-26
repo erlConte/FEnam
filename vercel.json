@@ -1,0 +1,13 @@
+{
+  "buildCommand": "prisma generate && npm run migrate:deploy && next build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "env": {
+    "PRISMA_GENERATE_DATAPROXY": "false"
+  },
+  "functions": {
+    "pages/api/**/*.js": {
+      "maxDuration": 30
+    }
+  }
+}
