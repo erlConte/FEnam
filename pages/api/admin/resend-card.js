@@ -12,8 +12,11 @@ import { logger } from '../../../lib/logger'
 
 // Inizializza Resend (opzionale, non blocca se manca)
 let resend = null
-if (process.env.RESEND_API_KEY && process.env.SENDER_EMAIL) {
+const senderEmail = process.env.SENDER_EMAIL || 'noreply@fenam.website'
+if (process.env.RESEND_API_KEY && senderEmail) {
   resend = new Resend(process.env.RESEND_API_KEY)
+} else if (!process.env.SENDER_EMAIL) {
+  logger.warn('[Resend Card] SENDER_EMAIL non configurato, usando fallback noreply@fenam.website')
 }
 
 // Schema validazione
@@ -114,7 +117,7 @@ export default async function handler(req, res) {
 
     // 8) Invia email con PDF allegato
     await resend.emails.send({
-      from: process.env.SENDER_EMAIL,
+      from: senderEmail,
       to: affiliation.email,
       subject: 'Reinvio tessera socio FENAM',
       html: `
@@ -153,7 +156,7 @@ export default async function handler(req, res) {
       
       <p>Per qualsiasi domanda o informazione:</p>
       <ul>
-        <li>Email: <a href="mailto:info@fenam.it">info@fenam.it</a></li>
+        <li>Email: <a href="mailto:${process.env.CONTACT_EMAIL || 'info@fenam.website'}">${process.env.CONTACT_EMAIL || 'info@fenam.website'}</a></li>
         <li>Visita il nostro sito: <a href="${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}">${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}</a></li>
       </ul>
 
@@ -184,7 +187,7 @@ ${affiliation.memberUntil ? `- Valida fino al: ${new Date(affiliation.memberUnti
 Puoi stampare la tessera o conservarla sul tuo dispositivo. La tessera include un QR code per la verifica online.
 
 Per qualsiasi domanda o informazione:
-- Email: info@fenam.it
+- Email: ${process.env.CONTACT_EMAIL || 'info@fenam.website'}
 - Sito web: ${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}
 
 Cordiali saluti,

@@ -67,6 +67,20 @@ export default async function handler(req, res) {
   const resendConfigured = !!(resendApiKey && senderEmail && emailRegex.test(senderEmail))
   checks.checks.resendConfigured = resendConfigured
 
+  // Check Resend Audience ID (richiesto per newsletter)
+  const resendAudienceId = process.env.RESEND_AUDIENCE_ID
+  checks.checks.resendAudienceId = resendAudienceId ? 'configured' : 'not_configured'
+  if (!resendAudienceId && resendConfigured) {
+    checks.status = 'degraded'
+  }
+
+  // Check Contact Email (richiesto per form contatti)
+  const contactEmail = process.env.CONTACT_EMAIL
+  checks.checks.contactEmail = contactEmail ? 'configured' : 'not_configured'
+  if (!contactEmail && resendConfigured) {
+    checks.status = 'degraded'
+  }
+
   // Check env vars opzionali
   const optionalEnvVars = {
     ENOTEMPO_HANDOFF_URL: process.env.ENOTEMPO_HANDOFF_URL ? 'configured' : 'not_configured',

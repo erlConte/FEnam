@@ -1,11 +1,16 @@
 // pages/api/contact.js
 import { z } from 'zod'
-import { prisma } from '../../lib/prisma'
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 import { rateLimit } from '../../lib/rateLimit'
 import { checkMethod, sendError, sendSuccess } from '../../lib/apiHelpers'
 import { handleCors } from '../../lib/cors'
 import { logger } from '../../lib/logger'
+
+// Inizializza Resend opzionalmente (non blocca startup se manca)
+let resend = null
+if (process.env.RESEND_API_KEY && process.env.SENDER_EMAIL) {
+  resend = new Resend(process.env.RESEND_API_KEY)
+}
 
 // Schema di validazione
 const contactSchema = z.object({
@@ -40,61 +45,54 @@ export default async function handler(req, res) {
   }
   const { nome, cognome, telefono, email, messaggio } = parse.data
 
-  try {
-    // Salvo SEMPRE in database
-    await prisma.contactMessage.create({
-      data: {
-        nome,
-        cognome,
-        telefono: telefono || null,
-        email,
-        messaggio,
-      },
-    })
-  } catch (dbErr) {
-    logger.error('[Contact API] Errore DB', dbErr)
-    return sendError(res, 500, 'Database error', 'Errore salvataggio in database')
+  // Verifica Resend configurato
+  if (!resend) {
+    logger.error('[Contact API] RESEND_API_KEY o SENDER_EMAIL non configurati')
+    return sendError(res, 503, 'Service unavailable', 'Servizio contatti momentaneamente non disponibile. Riprova più tardi.')
   }
 
-  // 4) Se hai le credenziali SMTP, invia la mail; altrimenti skip
-  if (
-    process.env.SMTP_HOST &&
-    process.env.SMTP_USER &&
-    process.env.SMTP_PASS &&
-    process.env.SMTP_PORT
-  ) {
-    try {
-      const transporter = nodemailer.createTransport({
-        host:   process.env.SMTP_HOST,
-        port:  +process.env.SMTP_PORT,
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
-      })
+  // Verifica CONTACT_EMAIL configurato
+  const contactEmail = process.env.CONTACT_EMAIL || 'info@fenam.website'
+  if (!contactEmail) {
+    logger.error('[Contact API] CONTACT_EMAIL non configurato')
+    return sendError(res, 503, 'Service unavailable', 'Servizio contatti momentaneamente non disponibile. Riprova più tardi.')
+  }
 
-      await transporter.sendMail({
-        from:    `"${nome} ${cognome}" <${process.env.SMTP_USER}>`,
-        to:      process.env.CONTACT_EMAIL,
-        subject: `Richiesta da ${nome} ${cognome}`,
-        text: `
+  try {
+    // Invio email tramite Resend (senza DB)
+    await resend.emails.send({
+      from:    process.env.SENDER_EMAIL,
+      to:      contactEmail,
+      replyTo: email,
+      subject: `Richiesta da ${nome} ${cognome}`,
+      html: `
+        <h2>Nuova richiesta di contatto</h2>
+        <p><strong>Nome:</strong> ${nome}</p>
+        <p><strong>Cognome:</strong> ${cognome}</p>
+        <p><strong>Telefono:</strong> ${telefono || '-'}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <hr/>
+        <p><strong>Messaggio:</strong></p>
+        <p>${messaggio.replace(/\n/g, '<br/>')}</p>
+      `,
+      text: `
+Nuova richiesta di contatto
+
 Nome: ${nome}
 Cognome: ${cognome}
 Telefono: ${telefono || '-'}
 Email: ${email}
 
+Messaggio:
 ${messaggio}
-        `,
-      })
-    } catch (mailErr) {
-      logger.warn('[Contact API] SMTP non configurato correttamente o errore invio mail', mailErr)
-      // non blocchiamo l'utente, andiamo avanti
-    }
-  } else {
-    logger.debug('[Contact API] Credenziali SMTP non trovate, salto invio email')
-  }
+      `,
+    })
 
-  // Risposta di successo
-  return sendSuccess(res, { ok: true })
+    logger.info(`[Contact API] Email inviata da ${email} a ${contactEmail}`)
+
+    return sendSuccess(res, { ok: true })
+  } catch (err) {
+    logger.error('[Contact API] Errore invio email Resend', err)
+    return sendError(res, 500, 'Internal server error', 'Errore durante l\'invio del messaggio. Riprova più tardi.')
+  }
 }

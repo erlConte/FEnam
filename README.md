@@ -233,20 +233,20 @@ PAYPAL_CLIENT_ID=your_paypal_client_id
 PAYPAL_CLIENT_SECRET=your_paypal_client_secret
 NEXT_PUBLIC_PAYPAL_CLIENT_ID=your_paypal_client_id
 
-# Resend (per newsletter e tessera PDF)
+# Resend (per newsletter, form contatti e tessera PDF)
 RESEND_API_KEY=your_resend_api_key
-RESEND_AUDIENCE_ID=your_resend_audience_id
-SENDER_EMAIL=noreply@fenam.it
+RESEND_AUDIENCE_ID=your_resend_audience_id  # OBBLIGATORIO per newsletter
+SENDER_EMAIL=noreply@fenam.website  # Fallback: noreply@fenam.website se non configurato
+CONTACT_EMAIL=info@fenam.website  # OBBLIGATORIO per form contatti (riceve le email), fallback: info@fenam.website
 # Opzionale: personalizza oggetto email affiliazione
 AFFILIAZIONE_EMAIL_SUBJECT=Conferma affiliazione FENAM
 
-# SMTP (opzionale, per form contatti)
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=your_smtp_user
-SMTP_PASS=your_smtp_pass
-SMTP_SECURE=false
-CONTACT_EMAIL=info@fenam.it
+# SMTP (DEPRECATO - non più usato per form contatti, ora usa Resend)
+# SMTP_HOST=smtp.example.com
+# SMTP_PORT=587
+# SMTP_USER=your_smtp_user
+# SMTP_PASS=your_smtp_pass
+# SMTP_SECURE=false
 
 # Base URL (per link email)
 NEXT_PUBLIC_BASE_URL=http://localhost:3000

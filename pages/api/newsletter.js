@@ -1,8 +1,6 @@
 // pages/api/newsletter.js
 import { z } from 'zod'
-import { prisma } from '../../lib/prisma'
 import { Resend } from 'resend'
-import crypto from 'crypto'
 import { rateLimit } from '../../lib/rateLimit'
 import { checkMethod, sendError, sendSuccess } from '../../lib/apiHelpers'
 import { handleCors } from '../../lib/cors'
@@ -40,7 +38,13 @@ export default async function handler(req, res) {
   // Verifica Resend configurato
   if (!resend) {
     logger.error('[Newsletter] RESEND_API_KEY o SENDER_EMAIL non configurati')
-    return sendError(res, 503, 'Service unavailable', 'Servizio email non disponibile. Contatta il supporto.')
+    return sendError(res, 503, 'Service unavailable', 'Servizio newsletter momentaneamente non disponibile. Riprova più tardi.')
+  }
+
+  // Verifica RESEND_AUDIENCE_ID configurato (richiesto per aggiungere contatti)
+  if (!process.env.RESEND_AUDIENCE_ID) {
+    logger.error('[Newsletter] RESEND_AUDIENCE_ID non configurato')
+    return sendError(res, 503, 'Service unavailable', 'Servizio newsletter momentaneamente non disponibile. Riprova più tardi.')
   }
 
   // Validazione input
@@ -51,40 +55,25 @@ export default async function handler(req, res) {
   }
   const { email } = parseResult.data
 
-  // Generazione token e scadenza (24h)
-  const token     = crypto.randomBytes(32).toString('hex')
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
-
   try {
-    // Salvo richiesta in database
-    await prisma.newsletterSubscription.create({
-      data: { email, token, expiresAt },
+    // Aggiungi direttamente all'audience Resend (senza DB, senza doppio opt-in)
+    await resend.contacts.create({
+      audienceId: process.env.RESEND_AUDIENCE_ID,
+      email: email,
     })
 
-    // Costruisco link di conferma
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-    if (!baseUrl) {
-      logger.error('[Newsletter] NEXT_PUBLIC_BASE_URL is missing')
-      return sendError(res, 500, 'Configuration error', 'Configurazione server errata')
-    }
-    const confirmUrl  = `${baseUrl}/newsletter/confirm?token=${token}`
-
-    // Invio email di conferma
-    await resend.emails.send({
-      from:    process.env.SENDER_EMAIL,
-      to:      email,
-      subject: 'Conferma la tua iscrizione alla newsletter F.E.N.A.M.',
-      html: `
-        <p>Ciao!</p>
-        <p>Grazie per esserti iscritto alla nostra newsletter.</p>
-        <p>Per completare l'iscrizione, clicca qui 👉 <a href="${confirmUrl}">Conferma la tua email</a></p>
-        <p>Il link scade in 24 ore.</p>
-      `,
-    })
+    logger.info(`[Newsletter] Email ${email} aggiunta all'audience Resend`)
 
     return sendSuccess(res, { ok: true })
   } catch (err) {
-    logger.error('[Newsletter] Errore', err)
-    return sendError(res, 500, 'Internal server error', 'Errore interno al server')
+    // Gestione errori Resend
+    if (err.response?.status === 422) {
+      // Email già presente nell'audience (non è un errore critico)
+      logger.info(`[Newsletter] Email ${email} già presente nell'audience`)
+      return sendSuccess(res, { ok: true })
+    }
+
+    logger.error('[Newsletter] Errore aggiunta contatto Resend', err)
+    return sendError(res, 500, 'Internal server error', 'Errore durante l\'iscrizione. Riprova più tardi.')
   }
 }

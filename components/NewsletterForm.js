@@ -39,8 +39,8 @@ export default function NewsletterForm() {
         toast.success('Iscrizione completata! Controlla la tua casella.')
         reset()
       } else {
-        // mostriamo il messaggio di errore ricevuto dal server
-        toast.error(json.error || 'Errore durante l\'iscrizione')
+        // mostriamo il messaggio user-friendly ricevuto dal server
+        toast.error(json.message || json.error || 'Errore durante l\'iscrizione')
       }
     } catch (err) {
       toast.error(err.message || 'Errore di rete, riprova più tardi')

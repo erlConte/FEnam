@@ -13,7 +13,8 @@ import crypto from 'crypto'
 
 // Inizializza Resend (opzionale, non blocca se manca)
 let resend = null
-if (process.env.RESEND_API_KEY && process.env.SENDER_EMAIL) {
+const senderEmail = process.env.SENDER_EMAIL || 'noreply@fenam.website'
+if (process.env.RESEND_API_KEY && senderEmail) {
   resend = new Resend(process.env.RESEND_API_KEY)
 }
 
@@ -247,7 +248,7 @@ export default async function handler(req, res) {
       
       <p>Per qualsiasi domanda o informazione, non esitare a contattarci:</p>
       <ul>
-        <li>Email: <a href="mailto:info@fenam.it">info@fenam.it</a></li>
+        <li>Email: <a href="mailto:${process.env.CONTACT_EMAIL || 'info@fenam.website'}">${process.env.CONTACT_EMAIL || 'info@fenam.website'}</a></li>
         <li>Visita il nostro sito: <a href="${baseUrl}">${baseUrl}</a></li>
       </ul>
 
@@ -285,7 +286,7 @@ RIEPILOGO AFFILIAZIONE:
 La tua tessera di affiliazione ti darà accesso a tutti i vantaggi esclusivi riservati ai soci FENAM.
 
 Per qualsiasi domanda o informazione:
-- Email: info@fenam.it
+- Email: ${process.env.CONTACT_EMAIL || 'info@fenam.website'}
 - Sito web: ${baseUrl}
 
 Grazie ancora per aver scelto di far parte della nostra comunità!
@@ -299,7 +300,7 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
           `.trim()
 
           const emailResponse = await resend.emails.send({
-            from: process.env.SENDER_EMAIL,
+            from: senderEmail,
             to: updatedAffiliation.email,
             subject: emailSubject,
             html: htmlContent,
@@ -363,7 +364,7 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
           const pdfBase64 = pdfBuffer.toString('base64')
 
           const cardResponse = await resend.emails.send({
-            from: process.env.SENDER_EMAIL,
+            from: senderEmail,
             to: updatedAffiliation.email,
             subject: 'La tua tessera socio FENAM',
             html: `
@@ -402,7 +403,7 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
       
       <p>Per qualsiasi domanda o informazione:</p>
       <ul>
-        <li>Email: <a href="mailto:info@fenam.it">info@fenam.it</a></li>
+        <li>Email: <a href="mailto:${process.env.CONTACT_EMAIL || 'info@fenam.website'}">${process.env.CONTACT_EMAIL || 'info@fenam.website'}</a></li>
         <li>Visita il nostro sito: <a href="${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}">${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}</a></li>
       </ul>
 
@@ -434,7 +435,7 @@ ${updatedAffiliation.memberUntil ? `- Valida fino al: ${new Date(updatedAffiliat
 Puoi stampare la tessera o conservarla sul tuo dispositivo. La tessera include un QR code per la verifica online.
 
 Per qualsiasi domanda o informazione:
-- Email: info@fenam.it
+- Email: ${process.env.CONTACT_EMAIL || 'info@fenam.website'}
 - Sito web: ${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}
 
 Grazie per essere parte della nostra comunità!
@@ -492,10 +493,12 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
         })
       }
     } else if (!resend) {
-      // Resend non configurato: log informativo
-      logger.warn('[PayPal Capture] Resend non configurato, email/card non inviate', {
+      // Resend non configurato: log warn
+      logger.warn('[PayPal Capture] Resend non configurato (RESEND_API_KEY o SENDER_EMAIL mancanti), email/card non inviate', {
         affiliationId: updatedAffiliation.id,
         orderID,
+        resendApiKeyConfigured: !!process.env.RESEND_API_KEY,
+        senderEmailConfigured: !!process.env.SENDER_EMAIL,
       })
     }
 

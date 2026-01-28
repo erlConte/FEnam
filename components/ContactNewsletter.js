@@ -36,7 +36,8 @@ export default function ContactNewsletter() {
         toast.success('Messaggio inviato! Ti risponderemo presto.')
         reset()
       } else {
-        toast.error(json.error || 'Errore durante l\'invio')
+        // mostriamo il messaggio user-friendly ricevuto dal server
+        toast.error(json.message || json.error || 'Errore durante l\'invio')
       }
     } catch (err) {
       toast.error('Errore di rete, riprova più tardi')
