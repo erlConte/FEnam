@@ -36,7 +36,8 @@ export default function NewsletterForm() {
       })
       const json = await res.json()
       if (res.ok && json.ok) {
-        toast.success('Iscrizione completata! Controlla la tua casella.')
+        // Messaggio corretto: non viene inviata email di conferma, solo aggiunta a audience
+        toast.success('Iscrizione completata!')
         reset()
       } else {
         // mostriamo il messaggio user-friendly ricevuto dal server

@@ -73,7 +73,13 @@ export default async function handler(req, res) {
 
   const { orderID } = parseResult.data
 
+  // Genera correlation ID per tracciare il flusso end-to-end
+  const correlationId = crypto.randomBytes(8).toString('hex')
+  const logContext = { orderID, correlationId }
+
   try {
+    logger.info('[PayPal Capture] Inizio processamento ordine', logContext)
+
     // 2) Esegui PayPal capture
     const request = new paypal.orders.OrdersCaptureRequest(orderID)
     // Nota: per capture, il body è opzionale (vuoto)
@@ -144,7 +150,7 @@ export default async function handler(req, res) {
 
     if (!existingAffiliation) {
       // OrderId non trovato: ritorna 404 (non creiamo record senza dati utente)
-      logger.error(`[PayPal Capture] OrderId ${orderID} non trovato nel DB`)
+      logger.error('[PayPal Capture] OrderId non trovato nel DB', logContext)
       return sendError(res, 404, 'Affiliation not found', 'OrderID non presente nel database. Contatta il supporto.')
     }
 
@@ -177,12 +183,55 @@ export default async function handler(req, res) {
     }
 
     // Usa funzione condivisa per completare affiliazione
-    const completionResult = await completeAffiliation({
-      affiliationId: existingAffiliation.id,
-      payerEmail,
-      amount: amount ? parseFloat(amount) : null,
-      currency: currency || 'EUR',
-    })
+    // IMPORTANTE: completeAffiliation può fallire per errori DB/Prisma
+    // Gestiamo questi errori separatamente dagli errori PayPal
+    let completionResult
+    try {
+      logger.info('[PayPal Capture] Chiamata completeAffiliation', {
+        ...logContext,
+        affiliationId: existingAffiliation.id,
+      })
+      
+      completionResult = await completeAffiliation({
+        affiliationId: existingAffiliation.id,
+        payerEmail,
+        amount: amount ? parseFloat(amount) : null,
+        currency: currency || 'EUR',
+        correlationId, // Passa correlation ID per logging interno
+      })
+      
+      logger.info('[PayPal Capture] completeAffiliation completata con successo', {
+        ...logContext,
+        affiliationId: existingAffiliation.id,
+        memberNumber: completionResult.memberNumber || 'non generato',
+        emailSent: completionResult.emailSent,
+        cardSent: completionResult.cardSent,
+      })
+    } catch (dbError) {
+      // Errore DB/Prisma durante completeAffiliation
+      // Questo NON è un errore PayPal, quindi gestiamolo separatamente
+      logErrorStructured(
+        '[PayPal Capture] Errore DB durante completeAffiliation',
+        dbError,
+        {
+          ...logContext,
+          affiliationId: existingAffiliation.id,
+          errorType: 'DB_ERROR',
+        },
+        'DB_CONN'
+      )
+      
+      // IMPORTANTE: PayPal capture è già avvenuto con successo,
+      // ma il DB update è fallito. Questo è un caso critico.
+      // Ritorniamo errore 500 per indicare problema server-side
+      return sendError(
+        res,
+        500,
+        'Database error',
+        'Il pagamento è stato completato ma si è verificato un errore durante l\'aggiornamento del database. Contatta il supporto con l\'ID ordine.',
+        { orderID, correlationId }
+      )
+    }
 
     // Recupera affiliazione aggiornata per risposta
     const updatedAffiliation = await prisma.affiliation.findUnique({
@@ -503,7 +552,8 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
     }
 
     // Log informazioni capture (senza dati sensibili)
-    logger.info(`[PayPal Capture] Order ${orderID} completato`, {
+    logger.info('[PayPal Capture] Order completato con successo', {
+      ...logContext,
       status,
       captureId: captureId ? 'presente' : 'non disponibile',
       amount: amount ? 'presente' : 'non disponibile',
@@ -514,7 +564,6 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
       emailMessageId: emailMessageId || 'non disponibile',
       cardMessageId: cardMessageId || 'non disponibile',
       affiliationId: updatedAffiliation.id,
-      email: updatedAffiliation.email,
     })
 
     // Verifica se handoff automatico è configurato
@@ -632,6 +681,48 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
       margin-top: 1rem;
       font-size: 0.9rem;
     }
+    #fallbackBox {
+      display: none;
+      margin-top: 1.5rem;
+      padding: 1.5rem;
+      background: #e8f5e9;
+      border-radius: 8px;
+      border-left: 4px solid #12A969;
+    }
+    #fallbackBox.show {
+      display: block;
+    }
+    #fallbackBox p {
+      margin: 0 0 1rem 0;
+      color: #2e7d32;
+      font-weight: 500;
+    }
+    #fallbackBox .fallback-links {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    #fallbackBox .fallback-links a {
+      display: inline-block;
+      padding: 10px 20px;
+      background-color: #12A969;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      transition: background-color 0.3s;
+    }
+    #fallbackBox .fallback-links a:hover {
+      background-color: #0f8a55;
+    }
+    #fallbackBox .fallback-links a.secondary {
+      background-color: #8fd1d2;
+      color: #024230;
+    }
+    #fallbackBox .fallback-links a.secondary:hover {
+      background-color: #7fc1c2;
+    }
   </style>
 </head>
 <body>
@@ -649,6 +740,14 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
     <a href="/supporto" class="fallback-link">Hai bisogno di aiuto? Contatta il supporto</a>
     
     <p id="errorMessage">Si è verificato un errore. <a href="/supporto">Contatta il supporto</a> per assistenza.</p>
+    
+    <div id="fallbackBox">
+      <p>Se Enotempo non si apre, la tua affiliazione è comunque completata su FENAM.</p>
+      <div class="fallback-links">
+        <a href="/affiliazione">Vai alla pagina Affiliazione</a>
+        <a href="/supporto" class="secondary">Contatta il Supporto</a>
+      </div>
+    </div>
     
     <noscript>
       <div style="margin-top: 1.5rem; padding: 1rem; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
@@ -670,7 +769,15 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
           }
         }, 500);
         
-        // Fallback: se dopo 10 secondi non è avvenuto redirect, mostra messaggio
+        // Fallback: se dopo 8-10 secondi non è avvenuto redirect, mostra box informativo
+        setTimeout(function() {
+          var fallbackBox = document.getElementById('fallbackBox');
+          if (fallbackBox) {
+            fallbackBox.classList.add('show');
+          }
+        }, 9000); // 9 secondi (tra 8-10)
+        
+        // Fallback: se dopo 10 secondi non è avvenuto redirect, mostra anche messaggio errore
         setTimeout(function() {
           var errorMsg = document.getElementById('errorMessage');
           if (errorMsg) {
@@ -715,18 +822,37 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
       cardSent: completionResult.cardSent,
     })
   } catch (paypalError) {
-    // Errore PayPal: log dettagliato (senza esporre secret)
-    logger.error('[PayPal Capture] PayPal error', paypalError, {
-      statusCode: paypalError.statusCode,
-      orderID,
-    })
+    // Errore PayPal SDK: log dettagliato (senza esporre secret)
+    // Questo catch gestisce SOLO errori dalla chiamata PayPal SDK (riga 81)
+    logErrorStructured(
+      '[PayPal Capture] Errore PayPal SDK',
+      paypalError,
+      {
+        ...logContext,
+        statusCode: paypalError.statusCode,
+        errorType: 'PAYPAL_SDK_ERROR',
+      },
+      'PAYPAL'
+    )
 
     // Se l'errore è specifico (es. order già catturato), possiamo gestirlo meglio
     if (paypalError.statusCode === 422) {
       // 422 = Unprocessable Entity (es. order già catturato o non valido)
-      return sendError(res, 502, 'PayPal error', 'Ordine non valido o già processato')
+      return sendError(
+        res,
+        502,
+        'PayPal error',
+        'Ordine non valido o già processato',
+        { orderID, correlationId }
+      )
     }
 
-    return sendError(res, 502, 'PayPal error', 'Errore durante il processamento del pagamento')
+    return sendError(
+      res,
+      502,
+      'PayPal error',
+      'Errore durante il processamento del pagamento PayPal',
+      { orderID, correlationId }
+    )
   }
 }

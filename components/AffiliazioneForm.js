@@ -127,20 +127,47 @@ export default function AffiliazioneForm() {
 
           const json = await res.json()
 
+          // IMPORTANTE: Verifica res.ok PRIMA di mostrare successo
+          // Se res.ok è false, il pagamento PayPal è completato ma il DB update è fallito
           if (!res.ok) {
-            const errorMsg = json.error || json.details || 'Errore durante la conferma del pagamento'
+            // Distingui tra errori diversi
+            let errorMsg = 'Errore durante la conferma del pagamento'
+            
+            if (res.status === 500 && json.details?.correlationId) {
+              // Errore DB: pagamento completato ma DB update fallito
+              errorMsg = 'Il pagamento è stato completato ma si è verificato un errore tecnico. Contatta il supporto con l\'ID ordine: ' + data.orderID
+              console.error('[Affiliazione] Errore DB dopo pagamento PayPal:', {
+                orderID: data.orderID,
+                correlationId: json.details.correlationId,
+                error: json.error,
+                message: json.message,
+              })
+            } else if (res.status === 502) {
+              // Errore PayPal
+              errorMsg = json.message || 'Errore durante il processamento del pagamento PayPal'
+            } else {
+              // Altri errori
+              errorMsg = json.message || json.error || 'Errore durante la conferma del pagamento'
+            }
+            
             toast.error(errorMsg)
-            console.error('Errore capture:', json)
+            console.error('[Affiliazione] Errore capture:', {
+              status: res.status,
+              orderID: data.orderID,
+              response: json,
+            })
             return
           }
 
+          // Solo se res.ok === true, mostra successo
           toast.success('Affiliazione completata!')
           
           // Gestione handoff (stessa logica per entrambi i flussi)
           await handleSuccessRedirect(data.orderID)
         } catch (err) {
-          console.error('Errore durante capture:', err)
-          toast.error('Errore durante la conferma del pagamento')
+          // Errore di rete o altro errore non gestito
+          console.error('[Affiliazione] Errore durante capture:', err)
+          toast.error('Errore di connessione durante la conferma del pagamento. Verifica la tua connessione e riprova.')
         }
       },
       onError: (err) => {

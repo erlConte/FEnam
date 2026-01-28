@@ -5,6 +5,7 @@ import { rateLimit } from '../../lib/rateLimit'
 import { checkMethod, sendError, sendSuccess } from '../../lib/apiHelpers'
 import { handleCors } from '../../lib/cors'
 import { logger } from '../../lib/logger'
+import crypto from 'crypto'
 
 // Inizializza Resend opzionalmente (non blocca startup se manca)
 let resend = null
@@ -55,25 +56,41 @@ export default async function handler(req, res) {
   }
   const { email } = parseResult.data
 
+  // Genera correlation ID per tracciare il flusso
+  const correlationId = crypto.randomBytes(8).toString('hex')
+  const logContext = { email: email.substring(0, 3) + '***', correlationId }
+
   try {
+    logger.info('[Newsletter] Inizio aggiunta contatto a Resend Audience', logContext)
+    
     // Aggiungi direttamente all'audience Resend (senza DB, senza doppio opt-in)
     await resend.contacts.create({
       audienceId: process.env.RESEND_AUDIENCE_ID,
       email: email,
     })
 
-    logger.info(`[Newsletter] Email ${email} aggiunta all'audience Resend`)
+    logger.info('[Newsletter] Email aggiunta all\'audience Resend con successo', logContext)
 
-    return sendSuccess(res, { ok: true })
+    return sendSuccess(res, { ok: true, correlationId })
   } catch (err) {
     // Gestione errori Resend
     if (err.response?.status === 422) {
       // Email già presente nell'audience (non è un errore critico)
-      logger.info(`[Newsletter] Email ${email} già presente nell'audience`)
-      return sendSuccess(res, { ok: true })
+      logger.info('[Newsletter] Email già presente nell\'audience (idempotente)', logContext)
+      return sendSuccess(res, { ok: true, correlationId, alreadySubscribed: true })
     }
 
-    logger.error('[Newsletter] Errore aggiunta contatto Resend', err)
-    return sendError(res, 500, 'Internal server error', 'Errore durante l\'iscrizione. Riprova più tardi.')
+    logger.error('[Newsletter] Errore aggiunta contatto Resend', err, {
+      ...logContext,
+      resendErrorStatus: err.response?.status || 'UNKNOWN',
+      resendErrorMessage: err.message || 'UNKNOWN',
+    })
+    return sendError(
+      res,
+      500,
+      'Internal server error',
+      'Errore durante l\'iscrizione. Riprova più tardi.',
+      { correlationId }
+    )
   }
 }
