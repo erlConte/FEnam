@@ -15,12 +15,17 @@ import crypto from 'crypto'
 // Inizializza PayPal client (stesso env di paypal.js: PAYPAL_ENV / NODE_ENV, base URL in log)
 const { client } = createPayPalClient()
 
-// Schema di validazione Zod
+// Schema di validazione Zod (campi opzionali per recovery: affiliation non trovata in DB)
 const captureSchema = z.object({
   orderID: z
     .string()
     .min(1, 'OrderID obbligatorio')
     .transform((val) => val.trim()),
+  nome: z.string().trim().min(2).max(80).optional(),
+  cognome: z.string().trim().min(2).max(80).optional(),
+  email: z.string().trim().max(200).optional(),
+  telefono: z.string().trim().max(25).optional(),
+  privacy: z.boolean().optional(),
 })
 
 export default async function handler(req, res) {
@@ -53,7 +58,7 @@ export default async function handler(req, res) {
     return sendError(res, 400, firstError.message || 'Validation error', null, parseResult.error.errors)
   }
 
-  const { orderID } = parseResult.data
+  const { orderID, nome: bodyNome, cognome: bodyCognome, email: bodyEmail, telefono: bodyTelefono, privacy: bodyPrivacy } = parseResult.data
 
   // Estrai correlation ID da header o genera uno nuovo
   const correlationId = getCorrelationId(req)
@@ -174,15 +179,58 @@ export default async function handler(req, res) {
     }
 
     // ============================================
-    // STEP 2: Verifica affiliazione nel DB
+    // STEP 2: Verifica affiliazione nel DB (o recovery se mancante)
     // ============================================
-    const existingAffiliation = await prisma.affiliation.findUnique({
+    let existingAffiliation = await prisma.affiliation.findUnique({
       where: { orderId: orderID },
     })
 
     if (!existingAffiliation) {
-      logger.error('[PayPal Capture] OrderId non trovato nel DB', logContext)
-      return sendError(res, 404, 'Affiliation not found', 'OrderID non presente nel database. Contatta il supporto.')
+      // Fallback: pagamento COMPLETED ma record non creato in paypal.js (es. errore DB) → crea affiliation "recovered"
+      // Usa solo dati body validi; altrimenti N/D per evitare dati finti
+      const hasValidEmail = (v) => typeof v === 'string' && v.trim().length >= 5 && v.includes('@')
+      const recoveryNome = bodyNome && bodyNome.trim().length >= 2 ? bodyNome.trim().slice(0, 80) : 'N/D'
+      const recoveryCognome = bodyCognome && bodyCognome.trim().length >= 2 ? bodyCognome.trim().slice(0, 80) : 'N/D'
+      const recoveryEmail = (bodyEmail && hasValidEmail(bodyEmail)) ? bodyEmail.trim().toLowerCase() : (payerEmail || 'N/D')
+      const recoveryTelefono = bodyTelefono && bodyTelefono.trim().length >= 1 ? bodyTelefono.trim().slice(0, 25) : 'N/D'
+      const recoveryPrivacy = bodyPrivacy !== false
+
+      try {
+        existingAffiliation = await prisma.affiliation.create({
+          data: {
+            orderId: orderID,
+            nome: recoveryNome,
+            cognome: recoveryCognome,
+            email: recoveryEmail,
+            telefono: recoveryTelefono,
+            privacy: recoveryPrivacy,
+            status: 'pending',
+          },
+        })
+        logger.warn('[PayPal Capture] Affiliation recovered: orderId non in DB, creato record da capture', {
+          orderID,
+          correlationId,
+          affiliationId: existingAffiliation.id,
+        })
+      } catch (createErr) {
+        // Anti-duplicati: due capture concorrenti → P2002 su orderId, ricarica record
+        if (createErr.code === 'P2002' && createErr.meta?.target?.includes('orderId')) {
+          const found = await prisma.affiliation.findUnique({ where: { orderId: orderID } })
+          if (found) {
+            existingAffiliation = found
+            logger.info('[PayPal Capture] Affiliation già creata da altra richiesta (P2002), uso record esistente', {
+              orderID,
+              correlationId,
+            })
+          } else {
+            logErrorStructured('[PayPal Capture] Errore recovery: P2002 ma record non trovato', createErr, logContext, 'DB_CONN')
+            return sendError(res, 500, 'Database error', 'Errore durante il recupero. Riprova o contatta il supporto.', { orderID, correlationId })
+          }
+        } else {
+          logErrorStructured('[PayPal Capture] Errore recovery: creazione affiliation fallita', createErr, logContext, 'DB_CONN')
+          return sendError(res, 500, 'Database error', 'OrderID non presente nel database. Contatta il supporto con l\'ID ordine.', { orderID, correlationId })
+        }
+      }
     }
 
     // Verifica se affiliazione è già completed (idempotenza)
