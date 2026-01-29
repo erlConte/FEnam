@@ -6,7 +6,7 @@ import { markAffiliationCompleted, runAffiliationSideEffects } from '../../../li
 import { checkMethod, sendError, sendSuccess } from '../../../lib/apiHelpers'
 import { handleCors } from '../../../lib/cors'
 import { logger, logErrorStructured, getCorrelationId } from '../../../lib/logger'
-import { createPayPalClient } from '../../../lib/paypalEnv'
+import { createPayPalClient, getPayPalBaseUrl, isPayPalLive } from '../../../lib/paypalEnv'
 import { createHandoffToken } from '../../../lib/handoffToken'
 import crypto from 'crypto'
 
@@ -59,8 +59,14 @@ export default async function handler(req, res) {
   const correlationId = getCorrelationId(req)
   const logContext = { orderID, correlationId }
 
-  // Log SEMPRE: route hit, correlationId, orderID (senza email/token/secret)
-  logger.info('[PayPal Capture] route hit', logContext)
+  // Log SEMPRE: route hit, paypalBaseUrl, paypalMode, orderID, correlationId (senza segreti)
+  const paypalBaseUrl = getPayPalBaseUrl()
+  const paypalMode = isPayPalLive() ? 'live' : 'sandbox'
+  logger.info('[PayPal Capture] route hit', {
+    ...logContext,
+    paypalBaseUrl,
+    paypalMode,
+  })
 
   try {
     logger.info('[PayPal Capture] Inizio processamento ordine', logContext)
@@ -80,6 +86,8 @@ export default async function handler(req, res) {
     logger.info('[PayPal Capture] PayPal capture response', {
       orderID,
       correlationId,
+      paypalBaseUrl: getPayPalBaseUrl(),
+      paypalMode: isPayPalLive() ? 'live' : 'sandbox',
       paypalHttpStatus: httpStatus,
       paypalStatus: status,
       ...(reason && { reason }),
@@ -146,7 +154,7 @@ export default async function handler(req, res) {
         capturedAmount: amount,
         orderAmount,
       })
-      return sendError(res, 400, 'Invalid amount', 'L\'importo catturato è inferiore al minimo richiesto (€10)')
+      return sendError(res, 400, 'Invalid amount', 'Importo minimo 10€')
     }
 
     // Verifica mismatch tra importo ordine e importo catturato
@@ -224,7 +232,7 @@ export default async function handler(req, res) {
         memberNumber: dbResult.memberNumber,
       })
 
-      // Verifica stato DB subito dopo markAffiliationCompleted (per debug)
+      // Riepilogo stato DB dopo markCompleted (log completo solo in debug)
       const afterMark = await prisma.affiliation.findUnique({
         where: { orderId: orderID },
         select: {
@@ -239,13 +247,19 @@ export default async function handler(req, res) {
       logger.info('[PayPal Capture] Stato DB dopo markCompleted', {
         orderID,
         correlationId,
+        affiliationId: existingAffiliation.id,
         status: afterMark?.status ?? null,
         memberNumber: afterMark?.memberNumber ?? null,
-        memberSince: afterMark?.memberSince?.toISOString() ?? null,
-        memberUntil: afterMark?.memberUntil?.toISOString() ?? null,
-        confirmationEmailSentAt: afterMark?.confirmationEmailSentAt?.toISOString() ?? null,
-        membershipCardSentAt: afterMark?.membershipCardSentAt?.toISOString() ?? null,
       })
+      if (process.env.LOG_LEVEL === 'debug') {
+        logger.debug('[PayPal Capture] Stato DB (debug)', {
+          orderID,
+          memberSince: afterMark?.memberSince?.toISOString() ?? null,
+          memberUntil: afterMark?.memberUntil?.toISOString() ?? null,
+          confirmationEmailSentAt: afterMark?.confirmationEmailSentAt?.toISOString() ?? null,
+          membershipCardSentAt: afterMark?.membershipCardSentAt?.toISOString() ?? null,
+        })
+      }
     } catch (dbError) {
       // ERRORE CRITICO: PayPal capture è avvenuto ma DB update è fallito
       logErrorStructured(

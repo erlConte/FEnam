@@ -6,6 +6,7 @@ import { toast } from 'react-toastify'
 import { useRouter } from 'next/router'
 import 'react-toastify/dist/ReactToastify.css'
 
+const DONAZIONE_MIN = 10
 const schema = z.object({
   nome:     z.string().min(2, 'Obbligatorio'),
   cognome:  z.string().min(2, 'Obbligatorio'),
@@ -96,7 +97,7 @@ export default function AffiliazioneForm() {
     paypalRef.current.innerHTML = ''
 
     window.paypal.Buttons({
-      style: { layout: 'vertical', label: 'paypal', height: 40 },
+      style: { layout: 'vertical', label: 'paypal', height: 40 }, // Label PayPal: copy "Dona e affiliati" è nel titolo sopra il bottone
 
       /* crea ordine */
       createOrder: async () => {
@@ -256,7 +257,7 @@ export default function AffiliazioneForm() {
         </div>
       ))}
 
-      {/* Donazione (0 = affiliazione gratuita) */}
+      {/* Donazione: 0 = affiliazione gratuita, ≥ 10€ = donazione e affiliati */}
       <div>
         <label className="mb-1 block text-sm">Donazione (€)</label>
         <input
@@ -265,10 +266,17 @@ export default function AffiliazioneForm() {
           step="1"
           min="0"
           defaultValue="0"
+          placeholder="Min. 10€"
           className="input-field"
         />
         {errors.donazione && (
           <p className="mt-1 text-xs text-red-600">{errors.donazione.message}</p>
+        )}
+        {donazioneNum > 0 && donazioneNum < DONAZIONE_MIN && !errors.donazione && (
+          <p className="mt-1 text-xs text-red-600">Importo minimo 10€</p>
+        )}
+        {donazioneNum >= DONAZIONE_MIN && (
+          <p className="mt-1 text-xs text-secondary/80">Inserisci un importo ≥ 10€</p>
         )}
       </div>
 
@@ -278,7 +286,7 @@ export default function AffiliazioneForm() {
       </label>
       {errors.privacy && <p className="mt-1 text-xs text-red-600">{errors.privacy.message}</p>}
 
-      {/* Se donazione <= 0: pulsante Affiliati gratis; altrimenti PayPal */}
+      {/* Se donazione <= 0: pulsante Affiliati gratis; se 0 < donazione < 10: messaggio min; altrimenti Dona e affiliati (PayPal) */}
       {donazioneNum <= 0 ? (
         <div className="w-full">
           <button
@@ -317,8 +325,17 @@ export default function AffiliazioneForm() {
             {isSubmitting ? 'Invio in corso...' : 'Affiliati gratis'}
           </button>
         </div>
+      ) : donazioneNum < DONAZIONE_MIN ? (
+        <div className="w-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-secondary">
+          <p className="font-medium">Importo minimo 10€</p>
+          <p className="mt-1 text-secondary/80">Inserisci almeno 10€ per procedere con la donazione e l&apos;affiliazione.</p>
+        </div>
       ) : (
-        <div ref={paypalRef} className="w-full" />
+        <div className="w-full space-y-1">
+          <p className="text-sm font-semibold text-secondary">Dona e affiliati</p>
+          <p className="text-xs text-secondary/80">Donazione minima 10€</p>
+          <div ref={paypalRef} className="w-full" />
+        </div>
       )}
     </form>
   )

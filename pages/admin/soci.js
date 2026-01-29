@@ -111,7 +111,7 @@ export default function AdminSoci() {
       }
 
       const data = await response.json()
-      alert(`✅ Tessera reinviata con successo a ${data.email}`)
+      alert(`✅ ${data.message || 'Tessera reinviata con successo'}${data.memberNumber ? ` (${data.memberNumber})` : ''}`)
       // Ricarica dati
       fetchAffiliations(storedToken)
     } catch (err) {

@@ -4,7 +4,7 @@ import { Resend } from 'resend'
 import { rateLimit } from '../../lib/rateLimit'
 import { checkMethod, sendError, sendSuccess } from '../../lib/apiHelpers'
 import { handleCors } from '../../lib/cors'
-import { logger } from '../../lib/logger'
+import { logger, maskEmail } from '../../lib/logger'
 
 // Inizializza Resend opzionalmente (non blocca startup se manca)
 let resend = null
@@ -88,11 +88,11 @@ ${messaggio}
       `,
     })
 
-    logger.info(`[Contact API] Email inviata da ${email} a ${contactEmail}`)
+    logger.info('[Contact API] Email inviata', { from: maskEmail(email), to: maskEmail(contactEmail) })
 
     return sendSuccess(res, { ok: true })
   } catch (err) {
-    logger.error('[Contact API] Errore invio email Resend', err)
+    logger.error('[Contact API] Errore invio email Resend', err, { from: maskEmail(email) })
     return sendError(res, 500, 'Internal server error', 'Errore durante l\'invio del messaggio. Riprova più tardi.')
   }
 }

@@ -6,7 +6,7 @@ import { rateLimit } from '../../../lib/rateLimit'
 import { checkMethod, sendError, sendSuccess } from '../../../lib/apiHelpers'
 import { handleCors } from '../../../lib/cors'
 import { logger, getCorrelationId } from '../../../lib/logger'
-import { createPayPalClient } from '../../../lib/paypalEnv'
+import { createPayPalClient, getPayPalBaseUrl, isPayPalLive } from '../../../lib/paypalEnv'
 
 // Inizializza PayPal client opzionalmente (non blocca startup se manca)
 const { client } = createPayPalClient()
@@ -95,6 +95,11 @@ export default async function handler(req, res) {
       { path: ['donazione'], message: 'Donazione 0: usa /api/affiliazione/free' }
     ])
   }
+  if (total < 10) {
+    return sendError(res, 400, 'Invalid amount', 'Importo minimo 10€', [
+      { path: ['donazione'], message: 'Importo minimo 10€' }
+    ])
+  }
   if (total > 10000) {
     return sendError(res, 400, 'Amount too high', 'La donazione non può superare €10.000', [
       { path: ['donazione'], message: 'La donazione non può superare €10.000' }
@@ -131,12 +136,17 @@ export default async function handler(req, res) {
     const order = await client.execute(request)
     const orderId = order.result.id
 
-    // Log: correlationId, amount, currency, orderID (senza dati sensibili)
+    // Log create-order: paypalBaseUrl, paypalMode, intent, amount, currency, orderID, correlationId (senza segreti)
+    const paypalBaseUrl = getPayPalBaseUrl()
+    const paypalMode = isPayPalLive() ? 'live' : 'sandbox'
     logger.info('[PayPal API] Ordine creato', {
-      correlationId,
+      paypalBaseUrl,
+      paypalMode,
+      intent: 'CAPTURE',
       amount: totalFormatted,
       currency,
       orderID: orderId,
+      correlationId,
     })
 
     // 5) Persistenza su DB con idempotenza
