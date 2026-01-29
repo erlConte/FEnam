@@ -2,36 +2,18 @@ import paypal from '@paypal/checkout-server-sdk'
 import { z } from 'zod'
 import { prisma } from '../../../lib/prisma'
 import { rateLimit } from '../../../lib/rateLimit'
-import { completeAffiliation } from '../../../lib/affiliation'
+import { markAffiliationCompleted, runAffiliationSideEffects } from '../../../lib/affiliation'
 import { checkMethod, sendError, sendSuccess } from '../../../lib/apiHelpers'
 import { handleCors } from '../../../lib/cors'
-import { logger, logErrorStructured } from '../../../lib/logger'
+import { logger, logErrorStructured, getCorrelationId } from '../../../lib/logger'
+import { createPayPalClient } from '../../../lib/paypalEnv'
 import { createHandoffToken } from '../../../lib/handoffToken'
-import { Resend } from 'resend'
-import { generateMembershipCardPdf } from '../../../lib/membershipCardPdf'
 import crypto from 'crypto'
 
-// Inizializza Resend (opzionale, non blocca se manca)
-let resend = null
-const senderEmail = process.env.SENDER_EMAIL || 'noreply@fenam.website'
-if (process.env.RESEND_API_KEY && senderEmail) {
-  resend = new Resend(process.env.RESEND_API_KEY)
-}
+// Resend non più necessario qui: gestito in lib/affiliation.js
 
-// Inizializza PayPal client opzionalmente (non blocca startup se manca)
-let client = null
-if (process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET) {
-  const environment = process.env.NODE_ENV === 'production'
-    ? new paypal.core.LiveEnvironment(
-        process.env.PAYPAL_CLIENT_ID,
-        process.env.PAYPAL_CLIENT_SECRET
-      )
-    : new paypal.core.SandboxEnvironment(
-        process.env.PAYPAL_CLIENT_ID,
-        process.env.PAYPAL_CLIENT_SECRET
-      )
-  client = new paypal.core.PayPalHttpClient(environment)
-}
+// Inizializza PayPal client (stesso env di paypal.js: PAYPAL_ENV / NODE_ENV, base URL in log)
+const { client } = createPayPalClient()
 
 // Schema di validazione Zod
 const captureSchema = z.object({
@@ -73,22 +55,62 @@ export default async function handler(req, res) {
 
   const { orderID } = parseResult.data
 
-  // Genera correlation ID per tracciare il flusso end-to-end
-  const correlationId = crypto.randomBytes(8).toString('hex')
+  // Estrai correlation ID da header o genera uno nuovo
+  const correlationId = getCorrelationId(req)
   const logContext = { orderID, correlationId }
+
+  // Log SEMPRE: route hit, correlationId, orderID (senza email/token/secret)
+  logger.info('[PayPal Capture] route hit', logContext)
 
   try {
     logger.info('[PayPal Capture] Inizio processamento ordine', logContext)
 
-    // 2) Esegui PayPal capture
+    // ============================================
+    // STEP 1: PayPal Capture (SOLO rete/PayPal)
+    // ============================================
     const request = new paypal.orders.OrdersCaptureRequest(orderID)
-    // Nota: per capture, il body è opzionale (vuoto)
-
     const captureResponse = await client.execute(request)
     const order = captureResponse.result
 
-    // 3) Estrai dati dalla risposta PayPal
+    // Log risposta PayPal: HTTP status, paypalStatus, eventuali reason/debug_id (senza email/token/secret)
     const status = order.status || 'UNKNOWN'
+    const httpStatus = captureResponse.statusCode ?? null
+    const reason = order.details?.[0]?.issue || order.message || null
+    const debugId = order.debug_id ?? order.details?.[0]?.debug_id ?? null
+    logger.info('[PayPal Capture] PayPal capture response', {
+      orderID,
+      correlationId,
+      paypalHttpStatus: httpStatus,
+      paypalStatus: status,
+      ...(reason && { reason }),
+      ...(debugId && { debug_id: debugId }),
+    })
+
+    // Se PayPal non ha restituito COMPLETED: non completare affiliazione, salva debug e ritorna 200 con messaggio
+    if (status !== 'COMPLETED') {
+      const existingForDebug = await prisma.affiliation.findUnique({
+        where: { orderId: orderID },
+        select: { id: true },
+      })
+      if (existingForDebug) {
+        await prisma.affiliation.update({
+          where: { id: existingForDebug.id },
+          data: { lastPaypalStatus: status, lastPaypalCheckedAt: new Date() },
+        })
+      }
+      logger.warn('[PayPal Capture] Pagamento non COMPLETED, non si chiama markAffiliationCompleted', {
+        orderID,
+        correlationId,
+        paypalStatus: status,
+      })
+      return sendSuccess(res, {
+        ok: true,
+        paypalStatus: status,
+        correlationId,
+        message: `Pagamento non completato: stato = ${status}. PayPal sta processando, riprova tra qualche minuto.`,
+      })
+    }
+
     const payerEmail =
       order.payer?.email_address || order.payer?.email || null
 
@@ -143,33 +165,29 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4) Aggiorna DB (Prisma)
+    // ============================================
+    // STEP 2: Verifica affiliazione nel DB
+    // ============================================
     const existingAffiliation = await prisma.affiliation.findUnique({
       where: { orderId: orderID },
     })
 
     if (!existingAffiliation) {
-      // OrderId non trovato: ritorna 404 (non creiamo record senza dati utente)
       logger.error('[PayPal Capture] OrderId non trovato nel DB', logContext)
       return sendError(res, 404, 'Affiliation not found', 'OrderID non presente nel database. Contatta il supporto.')
     }
 
-    // Verifica se affiliazione è newlyCompleted (status cambia da pending a completed)
+    // Verifica se affiliazione è già completed (idempotenza)
     const isNewlyCompleted = existingAffiliation.status !== 'completed'
 
-    // Se già completed, ritorna successo (idempotente) - evita reinvio email/card
     if (!isNewlyCompleted) {
-      // Log informativo: verifica stato email/card per tracciabilità
-      const emailAlreadySent = !!existingAffiliation.confirmationEmailSentAt
-      const cardAlreadySent = !!existingAffiliation.membershipCardSentAt
-      
-      logger.info('[PayPal Capture] Affiliazione già completata, skip reinvio email/card', {
-        orderID,
+      // Già completata: ritorna successo senza side effects
+      logger.info('[PayPal Capture] Affiliazione già completata (idempotente)', {
+        ...logContext,
         affiliationId: existingAffiliation.id,
-        emailAlreadySent,
-        cardAlreadySent,
-        emailSentAt: existingAffiliation.confirmationEmailSentAt?.toISOString() || null,
-        cardSentAt: existingAffiliation.membershipCardSentAt?.toISOString() || null,
+        memberNumber: existingAffiliation.memberNumber,
+        emailSent: !!existingAffiliation.confirmationEmailSentAt,
+        cardSent: !!existingAffiliation.membershipCardSentAt,
       })
       
       return sendSuccess(res, {
@@ -177,41 +195,61 @@ export default async function handler(req, res) {
         status: 'completed',
         orderID,
         message: 'Affiliazione già completata',
-        emailAlreadySent,
-        cardAlreadySent,
+        memberNumber: existingAffiliation.memberNumber,
+        emailSent: !!existingAffiliation.confirmationEmailSentAt,
+        cardSent: !!existingAffiliation.membershipCardSentAt,
       })
     }
 
-    // Usa funzione condivisa per completare affiliazione
-    // IMPORTANTE: completeAffiliation può fallire per errori DB/Prisma
-    // Gestiamo questi errori separatamente dagli errori PayPal
-    let completionResult
+    // ============================================
+    // STEP 3: DB Update - CRITICO (payment-first)
+    // ============================================
+    // Questo DEVE completare SEMPRE dopo PayPal capture success
+    let dbResult
     try {
-      logger.info('[PayPal Capture] Chiamata completeAffiliation', {
+      logger.info('[PayPal Capture] Marca affiliazione come completed', {
         ...logContext,
         affiliationId: existingAffiliation.id,
       })
       
-      completionResult = await completeAffiliation({
+      dbResult = await markAffiliationCompleted({
         affiliationId: existingAffiliation.id,
         payerEmail,
-        amount: amount ? parseFloat(amount) : null,
-        currency: currency || 'EUR',
-        correlationId, // Passa correlation ID per logging interno
+        correlationId,
       })
       
-      logger.info('[PayPal Capture] completeAffiliation completata con successo', {
+      logger.info('[PayPal Capture] DB aggiornato con successo', {
         ...logContext,
         affiliationId: existingAffiliation.id,
-        memberNumber: completionResult.memberNumber || 'non generato',
-        emailSent: completionResult.emailSent,
-        cardSent: completionResult.cardSent,
+        memberNumber: dbResult.memberNumber,
+      })
+
+      // Verifica stato DB subito dopo markAffiliationCompleted (per debug)
+      const afterMark = await prisma.affiliation.findUnique({
+        where: { orderId: orderID },
+        select: {
+          status: true,
+          memberNumber: true,
+          memberSince: true,
+          memberUntil: true,
+          confirmationEmailSentAt: true,
+          membershipCardSentAt: true,
+        },
+      })
+      logger.info('[PayPal Capture] Stato DB dopo markCompleted', {
+        orderID,
+        correlationId,
+        status: afterMark?.status ?? null,
+        memberNumber: afterMark?.memberNumber ?? null,
+        memberSince: afterMark?.memberSince?.toISOString() ?? null,
+        memberUntil: afterMark?.memberUntil?.toISOString() ?? null,
+        confirmationEmailSentAt: afterMark?.confirmationEmailSentAt?.toISOString() ?? null,
+        membershipCardSentAt: afterMark?.membershipCardSentAt?.toISOString() ?? null,
       })
     } catch (dbError) {
-      // Errore DB/Prisma durante completeAffiliation
-      // Questo NON è un errore PayPal, quindi gestiamolo separatamente
+      // ERRORE CRITICO: PayPal capture è avvenuto ma DB update è fallito
       logErrorStructured(
-        '[PayPal Capture] Errore DB durante completeAffiliation',
+        '[PayPal Capture] ERRORE CRITICO: DB update fallito dopo PayPal capture',
         dbError,
         {
           ...logContext,
@@ -221,9 +259,7 @@ export default async function handler(req, res) {
         'DB_CONN'
       )
       
-      // IMPORTANTE: PayPal capture è già avvenuto con successo,
-      // ma il DB update è fallito. Questo è un caso critico.
-      // Ritorniamo errore 500 per indicare problema server-side
+      // Ritorna errore 500: pagamento completato ma DB non aggiornato
       return sendError(
         res,
         500,
@@ -233,323 +269,60 @@ export default async function handler(req, res) {
       )
     }
 
+    // ============================================
+    // STEP 4: Side Effects NON bloccanti (email/PDF)
+    // ============================================
+    // Questi NON devono mai bloccare il completion
+    let sideEffectsResult = { emailSent: false, cardSent: false, warnings: [] }
+    try {
+      logger.info('[PayPal Capture] Esecuzione side effects (email/PDF)', {
+        ...logContext,
+        affiliationId: existingAffiliation.id,
+      })
+      
+      sideEffectsResult = await runAffiliationSideEffects({
+        affiliationId: existingAffiliation.id,
+        orderId: orderID,
+        amount: amountNum,
+        currency: currency || 'EUR',
+        correlationId,
+      })
+      
+      if (sideEffectsResult.warnings.length > 0) {
+        logger.warn('[PayPal Capture] Side effects completati con warnings', {
+          ...logContext,
+          warnings: sideEffectsResult.warnings,
+        })
+      } else {
+        logger.info('[PayPal Capture] Side effects completati con successo', {
+          ...logContext,
+          emailSent: sideEffectsResult.emailSent,
+          cardSent: sideEffectsResult.cardSent,
+        })
+      }
+    } catch (sideEffectsError) {
+      // Side effects falliti: logga ma NON bloccare
+      logErrorStructured(
+        '[PayPal Capture] Errore side effects (non bloccante)',
+        sideEffectsError,
+        {
+          ...logContext,
+          affiliationId: existingAffiliation.id,
+          errorType: 'SIDE_EFFECTS_ERROR',
+        },
+        'EMAIL'
+      )
+      sideEffectsResult.warnings.push('Errore durante invio email/tessera')
+    }
+
     // Recupera affiliazione aggiornata per risposta
     const updatedAffiliation = await prisma.affiliation.findUnique({
       where: { orderId: orderID },
     })
 
-    // Invio email sempre dopo successo (almeno quando newlyCompleted)
-    // Se completeAffiliation non ha inviato email, inviala manualmente con tracciamento
-    let emailMessageId = null
-    let cardMessageId = null
-
-    if (isNewlyCompleted && resend) {
-      // 1) Invio email di conferma se non già inviata
-      // Doppio check: completionResult + DB field per sicurezza
-      const shouldSendEmail = !completionResult.emailSent && !updatedAffiliation.confirmationEmailSentAt
-      
-      if (shouldSendEmail) {
-        try {
-          const emailSubject =
-            process.env.AFFILIAZIONE_EMAIL_SUBJECT ||
-            'Conferma affiliazione FENAM'
-
-          const baseUrl = process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'
-          const totalAmount = amountNum
-            ? `€${amountNum.toFixed(2)}`
-            : '€10,00 (donazione minima)'
-
-          const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background-color: #8fd1d2; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-    .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
-    .info-box { background-color: #fff; padding: 15px; border-left: 4px solid #8fd1d2; margin: 20px 0; }
-    .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
-    .button { display: inline-block; padding: 12px 24px; background-color: #8fd1d2; color: #fff; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1 style="color: #fff; margin: 0;">FENAM</h1>
-      <p style="color: #fff; margin: 5px 0 0 0;">Federazione Nazionale Associazioni Multiculturali</p>
-    </div>
-    <div class="content">
-      <h2>Grazie per la tua affiliazione!</h2>
-      <p>Caro/a <strong>${updatedAffiliation.nome} ${updatedAffiliation.cognome}</strong>,</p>
-      <p>La tua richiesta di affiliazione a FENAM è stata completata con successo.</p>
-      
-      <div class="info-box">
-        <h3 style="margin-top: 0;">Riepilogo affiliazione</h3>
-        <p><strong>Nome:</strong> ${updatedAffiliation.nome} ${updatedAffiliation.cognome}</p>
-        <p><strong>Email:</strong> ${updatedAffiliation.email}</p>
-        <p><strong>Importo totale:</strong> ${totalAmount}</p>
-        <p><strong>ID Ordine:</strong> ${updatedAffiliation.orderId || 'N/A'}</p>
-      </div>
-
-      <p>La tua tessera di affiliazione ti darà accesso a tutti i vantaggi esclusivi riservati ai soci FENAM.</p>
-      
-      <p>Per qualsiasi domanda o informazione, non esitare a contattarci:</p>
-      <ul>
-        <li>Email: <a href="mailto:${process.env.CONTACT_EMAIL || 'info@fenam.website'}">${process.env.CONTACT_EMAIL || 'info@fenam.website'}</a></li>
-        <li>Visita il nostro sito: <a href="${baseUrl}">${baseUrl}</a></li>
-      </ul>
-
-      <div style="text-align: center;">
-        <a href="${baseUrl}" class="button">Visita il sito FENAM</a>
-      </div>
-
-      <p>Grazie ancora per aver scelto di far parte della nostra comunità!</p>
-      <p>Cordiali saluti,<br><strong>Il team FENAM</strong></p>
-    </div>
-    <div class="footer">
-      <p>FENAM - Federazione Nazionale Associazioni Multiculturali</p>
-      <p>Questa email è stata inviata automaticamente. Si prega di non rispondere.</p>
-    </div>
-  </div>
-</body>
-</html>
-          `
-
-          const textContent = `
-FENAM - Federazione Nazionale Associazioni Multiculturali
-
-Grazie per la tua affiliazione!
-
-Caro/a ${updatedAffiliation.nome} ${updatedAffiliation.cognome},
-
-La tua richiesta di affiliazione a FENAM è stata completata con successo.
-
-RIEPILOGO AFFILIAZIONE:
-- Nome: ${updatedAffiliation.nome} ${updatedAffiliation.cognome}
-- Email: ${updatedAffiliation.email}
-- Importo totale: ${totalAmount}
-- ID Ordine: ${updatedAffiliation.orderId || 'N/A'}
-
-La tua tessera di affiliazione ti darà accesso a tutti i vantaggi esclusivi riservati ai soci FENAM.
-
-Per qualsiasi domanda o informazione:
-- Email: ${process.env.CONTACT_EMAIL || 'info@fenam.website'}
-- Sito web: ${baseUrl}
-
-Grazie ancora per aver scelto di far parte della nostra comunità!
-
-Cordiali saluti,
-Il team FENAM
-
----
-FENAM - Federazione Nazionale Associazioni Multiculturali
-Questa email è stata inviata automaticamente. Si prega di non rispondere.
-          `.trim()
-
-          const emailResponse = await resend.emails.send({
-            from: senderEmail,
-            to: updatedAffiliation.email,
-            subject: emailSubject,
-            html: htmlContent,
-            text: textContent,
-          })
-
-          emailMessageId = emailResponse.data?.id || null
-
-          await prisma.affiliation.update({
-            where: { id: updatedAffiliation.id },
-            data: { confirmationEmailSentAt: new Date() },
-          })
-
-          logger.info('[PayPal Capture] Email di conferma inviata', {
-            affiliationId: updatedAffiliation.id,
-            email: updatedAffiliation.email,
-            resendMessageId: emailMessageId,
-          })
-        } catch (emailError) {
-          logErrorStructured(
-            '[PayPal Capture] Errore invio email di conferma',
-            emailError,
-            {
-              affiliationId: updatedAffiliation.id,
-              email: updatedAffiliation.email,
-              orderID,
-            },
-            'EMAIL'
-          )
-          // Non far fallire l'API se Resend fallisce
-        }
-      } else {
-        // Email già inviata: log per tracciabilità
-        logger.info('[PayPal Capture] Email di conferma già inviata, skip reinvio', {
-          affiliationId: updatedAffiliation.id,
-          email: updatedAffiliation.email,
-          emailSentAt: updatedAffiliation.confirmationEmailSentAt?.toISOString() || null,
-          completionResultEmailSent: completionResult.emailSent,
-        })
-      }
-
-      // 2) Invio tessera PDF se non già inviata
-      // Doppio check: completionResult + DB field + prerequisiti per sicurezza
-      const shouldSendCard = 
-        !completionResult.cardSent &&
-        updatedAffiliation.status === 'completed' &&
-        updatedAffiliation.memberNumber &&
-        !updatedAffiliation.membershipCardSentAt
-      
-      if (shouldSendCard) {
-        try {
-          const pdfBuffer = await generateMembershipCardPdf({
-            nome: updatedAffiliation.nome,
-            cognome: updatedAffiliation.cognome,
-            memberNumber: updatedAffiliation.memberNumber,
-            memberSince: updatedAffiliation.memberSince,
-            memberUntil: updatedAffiliation.memberUntil,
-            id: updatedAffiliation.id,
-          })
-
-          const pdfBase64 = pdfBuffer.toString('base64')
-
-          const cardResponse = await resend.emails.send({
-            from: senderEmail,
-            to: updatedAffiliation.email,
-            subject: 'La tua tessera socio FENAM',
-            html: `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background-color: #8fd1d2; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
-    .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
-    .info-box { background-color: #fff; padding: 15px; border-left: 4px solid #8fd1d2; margin: 20px 0; }
-    .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1 style="color: #fff; margin: 0;">FENAM</h1>
-      <p style="color: #fff; margin: 5px 0 0 0;">Federazione Nazionale Associazioni Multiculturali</p>
-    </div>
-    <div class="content">
-      <h2>La tua tessera socio è pronta!</h2>
-      <p>Caro/a <strong>${updatedAffiliation.nome} ${updatedAffiliation.cognome}</strong>,</p>
-      <p>In allegato troverai la tua tessera socio FENAM in formato PDF.</p>
-      
-      <div class="info-box">
-        <h3 style="margin-top: 0;">Dettagli tessera</h3>
-        <p><strong>Numero tessera:</strong> ${updatedAffiliation.memberNumber}</p>
-        ${updatedAffiliation.memberSince ? `<p><strong>Valida dal:</strong> ${new Date(updatedAffiliation.memberSince).toLocaleDateString('it-IT')}</p>` : ''}
-        ${updatedAffiliation.memberUntil ? `<p><strong>Valida fino al:</strong> ${new Date(updatedAffiliation.memberUntil).toLocaleDateString('it-IT')}</p>` : ''}
-      </div>
-
-      <p>Puoi stampare la tessera o conservarla sul tuo dispositivo. La tessera include un QR code per la verifica online.</p>
-      
-      <p>Per qualsiasi domanda o informazione:</p>
-      <ul>
-        <li>Email: <a href="mailto:${process.env.CONTACT_EMAIL || 'info@fenam.website'}">${process.env.CONTACT_EMAIL || 'info@fenam.website'}</a></li>
-        <li>Visita il nostro sito: <a href="${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}">${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}</a></li>
-      </ul>
-
-      <p>Grazie per essere parte della nostra comunità!</p>
-      <p>Cordiali saluti,<br><strong>Il team FENAM</strong></p>
-    </div>
-    <div class="footer">
-      <p>FENAM - Federazione Nazionale Associazioni Multiculturali</p>
-      <p>Questa email è stata inviata automaticamente. Si prega di non rispondere.</p>
-    </div>
-  </div>
-</body>
-</html>
-            `,
-            text: `
-FENAM - Federazione Nazionale Associazioni Multiculturali
-
-La tua tessera socio è pronta!
-
-Caro/a ${updatedAffiliation.nome} ${updatedAffiliation.cognome},
-
-In allegato troverai la tua tessera socio FENAM in formato PDF.
-
-DETTAGLI TESSERA:
-- Numero tessera: ${updatedAffiliation.memberNumber}
-${updatedAffiliation.memberSince ? `- Valida dal: ${new Date(updatedAffiliation.memberSince).toLocaleDateString('it-IT')}` : ''}
-${updatedAffiliation.memberUntil ? `- Valida fino al: ${new Date(updatedAffiliation.memberUntil).toLocaleDateString('it-IT')}` : ''}
-
-Puoi stampare la tessera o conservarla sul tuo dispositivo. La tessera include un QR code per la verifica online.
-
-Per qualsiasi domanda o informazione:
-- Email: ${process.env.CONTACT_EMAIL || 'info@fenam.website'}
-- Sito web: ${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'}
-
-Grazie per essere parte della nostra comunità!
-
-Cordiali saluti,
-Il team FENAM
-
----
-FENAM - Federazione Nazionale Associazioni Multiculturali
-Questa email è stata inviata automaticamente. Si prega di non rispondere.
-            `.trim(),
-            attachments: [
-              {
-                filename: `Tessera_FENAM_${updatedAffiliation.memberNumber}.pdf`,
-                content: pdfBase64,
-                contentType: 'application/pdf',
-              },
-            ],
-          })
-
-          cardMessageId = cardResponse.data?.id || null
-
-          await prisma.affiliation.update({
-            where: { id: updatedAffiliation.id },
-            data: { membershipCardSentAt: new Date() },
-          })
-
-          logger.info('[PayPal Capture] Tessera PDF inviata', {
-            affiliationId: updatedAffiliation.id,
-            email: updatedAffiliation.email,
-            resendMessageId: cardMessageId,
-          })
-        } catch (cardError) {
-          logErrorStructured(
-            '[PayPal Capture] Errore invio tessera PDF',
-            cardError,
-            {
-              affiliationId: updatedAffiliation.id,
-              email: updatedAffiliation.email,
-              orderID,
-            },
-            'EMAIL'
-          )
-          // Non far fallire l'API se Resend fallisce
-        }
-      } else {
-        // Card già inviata o prerequisiti mancanti: log per tracciabilità
-        logger.info('[PayPal Capture] Tessera PDF già inviata o prerequisiti mancanti, skip reinvio', {
-          affiliationId: updatedAffiliation.id,
-          email: updatedAffiliation.email,
-          cardSentAt: updatedAffiliation.membershipCardSentAt?.toISOString() || null,
-          completionResultCardSent: completionResult.cardSent,
-          status: updatedAffiliation.status,
-          memberNumber: updatedAffiliation.memberNumber || null,
-        })
-      }
-    } else if (!resend) {
-      // Resend non configurato: log warn
-      logger.warn('[PayPal Capture] Resend non configurato (RESEND_API_KEY o SENDER_EMAIL mancanti), email/card non inviate', {
-        affiliationId: updatedAffiliation.id,
-        orderID,
-        resendApiKeyConfigured: !!process.env.RESEND_API_KEY,
-        senderEmailConfigured: !!process.env.SENDER_EMAIL,
-      })
-    }
+    // ============================================
+    // STEP 5: Risposta finale
+    // ============================================
 
     // Log informazioni capture (senza dati sensibili)
     logger.info('[PayPal Capture] Order completato con successo', {
@@ -558,11 +331,10 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
       captureId: captureId ? 'presente' : 'non disponibile',
       amount: amount ? 'presente' : 'non disponibile',
       currency: currency || 'non disponibile',
-      memberNumber: updatedAffiliation.memberNumber || 'non generato',
-      emailSent: completionResult.emailSent || !!emailMessageId,
-      cardSent: completionResult.cardSent || !!cardMessageId,
-      emailMessageId: emailMessageId || 'non disponibile',
-      cardMessageId: cardMessageId || 'non disponibile',
+      memberNumber: dbResult.memberNumber || 'non generato',
+      emailSent: sideEffectsResult.emailSent,
+      cardSent: sideEffectsResult.cardSent,
+      warnings: sideEffectsResult.warnings.length > 0 ? sideEffectsResult.warnings : undefined,
       affiliationId: updatedAffiliation.id,
     })
 
@@ -809,18 +581,26 @@ Questa email è stata inviata automaticamente. Si prega di non rispondere.
       logger.warn('[PayPal Capture] ENOTEMPO_HANDOFF_URL non configurato, uso comportamento normale')
     }
 
-    // Comportamento normale: risposta JSON
-    return sendSuccess(res, {
+    // Risposta JSON con warnings se presenti
+    const response = {
       ok: true,
       status,
       orderID,
       captureId,
       amount,
       currency,
-      memberNumber: updatedAffiliation.memberNumber,
-      emailSent: completionResult.emailSent,
-      cardSent: completionResult.cardSent,
-    })
+      memberNumber: dbResult.memberNumber,
+      emailSent: sideEffectsResult.emailSent,
+      cardSent: sideEffectsResult.cardSent,
+      correlationId,
+    }
+    
+    // Aggiungi warnings se presenti (non bloccanti)
+    if (sideEffectsResult.warnings.length > 0) {
+      response.warnings = sideEffectsResult.warnings
+    }
+    
+    return sendSuccess(res, response)
   } catch (paypalError) {
     // Errore PayPal SDK: log dettagliato (senza esporre secret)
     // Questo catch gestisce SOLO errori dalla chiamata PayPal SDK (riga 81)

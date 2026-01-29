@@ -220,13 +220,65 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/fenam?schema=public"
 
 ## Deploy Produzione (Vercel + Supabase)
 
-**Configurazione ENV in Vercel Dashboard**:
-- `DATABASE_URL`: Session pooler Supabase (`pgbouncer=true&connection_limit=1`)
-- `SKIP_MIGRATIONS=true`: Strategia B (migrazioni manuali via Supabase SQL Editor)
-- `NEXT_PUBLIC_BASE_URL=https://fenam.website`
-- PayPal LIVE credentials, Resend API, Admin token, Handoff secret
+Vercel è **IPv4-only**. La direct connection Supabase (`db.xxx.supabase.co:5432`) non è raggiungibile da Vercel. Usare **solo il pooler** per il runtime e **disabilitare le migrazioni** in build.
 
-**Build**: `prisma generate && npm run migrate:deploy && next build` (migrazioni skip se `SKIP_MIGRATIONS=true`)
+### Variabili d'ambiente su Vercel (obbligatorie)
+
+| Variabile | Valore | Note |
+|-----------|--------|------|
+| `DATABASE_URL` | Connection string **Session pooler** Supabase | Host tipo `aws-1-eu-central-1.pooler.supabase.com`, porta **6543**, con `?pgbouncer=true&connection_limit=1` |
+| `SKIP_MIGRATIONS` | `true` | **Obbligatorio** su Vercel: non eseguire `prisma migrate deploy` in build (evita uso di DIRECT_URL). Runtime usa solo `DATABASE_URL` (pooler). |
+| `DIRECT_URL` | (opzionale) | Su Vercel puoi impostarla uguale a `DATABASE_URL` solo per far passare `prisma generate` (lo schema la richiede). Le migrazioni non vengono comunque eseguite se `SKIP_MIGRATIONS=true`. |
+
+**Esempio DATABASE_URL (pooler)**:
+```
+postgresql://postgres.[ref]:[password]@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1
+```
+
+**Non usare su Vercel**:
+- Connection string **direct** (`db.xxx.supabase.co:5432`) → non IPv4-compatible da Vercel.
+
+### Comportamento build su Vercel
+
+- **Build**: `prisma generate && npm run migrate:deploy && next build`
+- Se `SKIP_MIGRATIONS=true`: lo script `migrate:deploy` (via `scripts/migrate-safe.js`) **non** esegue `prisma migrate deploy` e termina con successo. Il runtime userà solo `DATABASE_URL` (pooler).
+- Il client Prisma usa sempre `DATABASE_URL` per le query; `DIRECT_URL` serve solo a Prisma per le migrazioni (e su Vercel le migrazioni sono saltate).
+
+### Migrazioni: da dove farle
+
+Le migrazioni **non** vengono eseguite su Vercel. Applicarle in uno di questi modi:
+
+1. **Da locale (consigliato)**  
+   Sul tuo PC configura `.env` con:
+   - `DATABASE_URL` = stessa del pooler (o del pooler di staging)
+   - `DIRECT_URL` = connection string **direct** Supabase (host `db.xxx.supabase.co`, porta **5432**), raggiungibile dalla tua rete (IPv4).  
+   Poi:
+   ```bash
+   npx prisma migrate deploy
+   ```
+
+2. **Da Supabase SQL Editor**  
+   Copia il contenuto dei file in `prisma/migrations/*/migration.sql` ed eseguili manualmente nel SQL Editor del progetto Supabase.
+
+3. **Da un host con IPv4 verso Supabase**  
+   Se hai un server o CI con IPv4 che raggiunge Supabase, imposta lì `DIRECT_URL` e lancia `npx prisma migrate deploy`.
+
+### Riepilogo
+
+- **Produzione Vercel**: solo `DATABASE_URL` (pooler) + `SKIP_MIGRATIONS=true`. Nessun uso della direct in runtime.
+- **DIRECT_URL**: solo per eseguire migrazioni da locale (o da altro host IPv4), non richiesta in produzione su Vercel.
+- **Log avvio**: in `lib/prisma.js` viene loggato una volta (senza segreti) se `SKIP_MIGRATIONS` è attivo e se la connessione è in modalità pooler o direct (in base a host/porta).
+
+### Istruzioni rapide Vercel
+
+1. **Vercel → Settings → Environment Variables**
+   - `DATABASE_URL` = connection string **pooler** Supabase (host `*.pooler.supabase.com`, porta `6543`, con `?pgbouncer=true&connection_limit=1`).
+   - `SKIP_MIGRATIONS` = `true` (obbligatorio su Vercel).
+   - `DIRECT_URL` = uguale a `DATABASE_URL` (solo per far passare `prisma generate`; le migrazioni non vengono eseguite).
+
+2. **Migrazioni da locale**
+   - In `.env` locale: `DATABASE_URL` = pooler, `DIRECT_URL` = direct Supabase (host `db.xxx.supabase.co`, porta `5432`).
+   - Eseguire: `npx prisma migrate deploy`.
 
 # PayPal (Sandbox per dev, Live per produzione)
 PAYPAL_CLIENT_ID=your_paypal_client_id
@@ -445,6 +497,165 @@ npx prisma migrate resolve --applied MIGRATION_NAME
 Se vedi errori di drift:
 1. **Setup A**: Fai `migrate reset` e riapplica tutte le migrazioni
 2. **Setup B**: Usa `migrate resolve` per marcare migrazioni come applicate, oppure sincronizza manualmente lo schema con il database
+
+### Payment Troubleshooting
+
+#### Problema: Affiliazione resta "pending" dopo pagamento PayPal
+
+**Sintomi:**
+- Pagamento PayPal completato con successo
+- Record nel DB resta con `status = 'pending'`
+- Nessuna email/tessera inviata
+
+**Diagnosi:**
+
+1. **Verifica logs Vercel:**
+   - Vai su Vercel Dashboard → Project → Deployments → Logs
+   - Cerca errori con `[PayPal Capture]` o `[Mark Completed]`
+   - Cerca `correlationId` per tracciare il flusso completo
+
+2. **Query SQL per verificare stato:**
+   ```sql
+   -- Trova affiliazioni pending dopo pagamento
+   SELECT 
+     id,
+     "orderId",
+     status,
+     email,
+     "memberNumber",
+     "createdAt"
+   FROM "Affiliation"
+   WHERE status = 'pending'
+   ORDER BY "createdAt" DESC
+   LIMIT 10;
+   
+   -- Verifica se PayPal capture è avvenuto ma DB non aggiornato
+   -- (caso critico: pagamento completato ma DB non aggiornato)
+   SELECT 
+     id,
+     "orderId",
+     status,
+     "payerEmail",
+     "createdAt"
+   FROM "Affiliation"
+   WHERE status = 'pending'
+     AND "createdAt" > NOW() - INTERVAL '24 hours';
+   ```
+
+3. **Verifica errori DB:**
+   - Cerca nel log errori con categoria `DB_CONN` o `PRISMA`
+   - Verifica che `DATABASE_URL` sia corretta e il database raggiungibile
+   - Controlla che Prisma Client sia generato: `npx prisma generate`
+
+**Soluzione:**
+
+- **Se errore DB dopo PayPal capture:** Il pagamento è completato ma il DB non è stato aggiornato. Questo è un caso critico che richiede intervento manuale:
+  1. Identifica l'`orderId` dal log (correlationId presente)
+  2. Verifica su PayPal che il pagamento sia stato catturato
+  3. Aggiorna manualmente il DB o usa endpoint admin per completare l'affiliazione
+
+- **Se errore PayPal:** Verifica configurazione PayPal (CLIENT_ID, CLIENT_SECRET, ambiente sandbox/live)
+
+#### Problema: Email/tessera non inviate ma pagamento completato
+
+**Sintomi:**
+- `status = 'completed'` nel DB
+- `confirmationEmailSentAt` o `membershipCardSentAt` sono NULL
+- Nessuna email ricevuta
+
+**Diagnosi:**
+
+1. **Verifica configurazione Resend:**
+   ```sql
+   -- Verifica affiliazioni completate senza email
+   SELECT 
+     id,
+     email,
+     "orderId",
+     status,
+     "confirmationEmailSentAt",
+     "membershipCardSentAt"
+   FROM "Affiliation"
+   WHERE status = 'completed'
+     AND ("confirmationEmailSentAt" IS NULL OR "membershipCardSentAt" IS NULL)
+   ORDER BY "createdAt" DESC;
+   ```
+
+2. **Verifica env vars:**
+   - `RESEND_API_KEY` deve essere configurato
+   - `SENDER_EMAIL` deve essere verificato su Resend
+   - `RESEND_AUDIENCE_ID` deve essere configurato per newsletter
+
+3. **Verifica logs:**
+   - Cerca errori con categoria `EMAIL` o `PDF`
+   - Verifica che Resend non restituisca errori 422/429/500
+
+**Soluzione:**
+
+- **Side effects falliti (non bloccanti):** Il pagamento è completato e il DB è aggiornato. Le email/tessere possono essere reinviate tramite endpoint admin:
+  ```bash
+  POST /api/admin/resend-card
+  Authorization: Bearer <ADMIN_TOKEN>
+  Body: { "affiliationId": "..." }
+  ```
+
+#### Problema: Doppio memberNumber o collisioni
+
+**Sintomi:**
+- Errore Prisma `P2002` (unique constraint violation)
+- `memberNumber` duplicato nel DB
+
+**Diagnosi:**
+
+```sql
+-- Trova memberNumber duplicati
+SELECT "memberNumber", COUNT(*) as count
+FROM "Affiliation"
+WHERE "memberNumber" IS NOT NULL
+GROUP BY "memberNumber"
+HAVING COUNT(*) > 1;
+```
+
+**Soluzione:**
+
+- Il sistema gestisce automaticamente le collisioni con retry (max 5 tentativi)
+- Se persiste, verifica che il constraint `@unique` sia presente su `memberNumber` nel Prisma schema
+- In caso di collisione manuale, genera un nuovo memberNumber e aggiorna il record
+
+#### Come testare PayPal Sandbox
+
+1. **Crea account sandbox:**
+   - Vai su https://developer.paypal.com
+   - Crea account Business e Personal sandbox
+
+2. **Configura env vars:**
+   ```env
+   PAYPAL_CLIENT_ID=<sandbox_client_id>
+   PAYPAL_CLIENT_SECRET=<sandbox_secret>
+   NEXT_PUBLIC_PAYPAL_CLIENT_ID=<sandbox_client_id>
+   NODE_ENV=development
+   ```
+
+3. **Test flusso completo:**
+   - Usa account Personal sandbox per pagare
+   - Verifica che capture avvenga correttamente
+   - Controlla logs per correlationId
+   - Verifica DB che `status = 'completed'`
+
+#### Correlation ID e Logging
+
+Ogni richiesta genera un `correlationId` che permette di tracciare il flusso end-to-end:
+
+- **CorrelationId da header:** Se presente `x-correlation-id`, viene usato quello
+- **CorrelationId generato:** Altrimenti viene generato uno casuale
+- **Nei log:** Cerca `correlationId` per tracciare una singola richiesta attraverso tutti i servizi
+
+**Esempio query log Vercel:**
+```
+[PayPal Capture] correlationId: abc123def456
+[Mark Completed] correlationId: abc123def456
+[Side Effects] correlationId: abc123def456
+```
 
 ---
 

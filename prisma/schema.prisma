@@ -2,8 +2,8 @@
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")      // Session pooler per runtime (serverless)
-  directUrl = env("DIRECT_URL")        // Direct connection per migrazioni (opzionale)
+  url       = env("DATABASE_URL")      // Runtime: sempre pooler (Vercel usa solo questo)
+  directUrl = env("DIRECT_URL")        // Solo migrazioni (da locale). Su Vercel: = DATABASE_URL se SKIP_MIGRATIONS=true
 }
 
 generator client {
@@ -44,5 +44,7 @@ model Affiliation {
   memberUntil            DateTime?
   memberNumber           String?   @unique
   membershipCardSentAt   DateTime?
+  lastPaypalStatus       String?   // Debug: ultimo status PayPal (es. PENDING, COMPLETED)
+  lastPaypalCheckedAt    DateTime? // Debug: ultima verifica capture
   createdAt              DateTime  @default(now())
 }

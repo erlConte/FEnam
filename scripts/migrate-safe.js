@@ -1,6 +1,7 @@
 // scripts/migrate-safe.js
-// Script "smart" per eseguire migrazioni Prisma in modo sicuro
-// Gestisce errori di connessione (IPv4, network) e permette skip in produzione
+// Script "smart" per eseguire migrazioni Prisma in modo sicuro.
+// Su Vercel (IPv4-only): usare SKIP_MIGRATIONS=true e solo DATABASE_URL (pooler).
+// Migrazioni vanno eseguite da locale con DIRECT_URL (IPv4) o da Supabase SQL Editor.
 
 const { execSync } = require('child_process')
 const { exit } = require('process')
@@ -8,24 +9,26 @@ const { exit } = require('process')
 const SKIP_MIGRATIONS = process.env.SKIP_MIGRATIONS === 'true'
 const IS_PRODUCTION = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1'
 
-console.log('🔄 [Migrate Safe] Avvio migrazioni Prisma...')
+console.log('🔄 [Migrate Safe] Avvio...')
 console.log(`   Environment: ${IS_PRODUCTION ? 'production' : 'development'}`)
 console.log(`   SKIP_MIGRATIONS: ${SKIP_MIGRATIONS}`)
 
-// Verifica che DIRECT_URL sia configurato (opzionale ma consigliato)
+// Guard: se SKIP_MIGRATIONS=true NON eseguire mai migrate deploy (evita uso DIRECT_URL su Vercel)
+if (SKIP_MIGRATIONS) {
+  console.log('✅ [Migrate Safe] SKIP_MIGRATIONS=true → salto migrazioni (nessun prisma migrate deploy)')
+  console.log('   Runtime userà solo DATABASE_URL (pooler). Applica migrazioni da locale o Supabase SQL Editor.')
+  exit(0)
+}
+
+// Verifica che DIRECT_URL sia configurato (richiesto per migrate deploy)
 if (!process.env.DIRECT_URL) {
   console.warn('⚠️  [Migrate Safe] DIRECT_URL non configurato')
   console.warn('   Le migrazioni richiedono una direct connection (porta 5432)')
   console.warn('   DATABASE_URL (pooler) non supporta DDL operations')
   
-  if (SKIP_MIGRATIONS) {
-    console.log('✅ [Migrate Safe] SKIP_MIGRATIONS=true, salto migrazioni')
-    exit(0)
-  }
-  
   if (IS_PRODUCTION) {
     console.error('❌ [Migrate Safe] DIRECT_URL mancante in produzione e SKIP_MIGRATIONS=false')
-    console.error('   Configura DIRECT_URL o imposta SKIP_MIGRATIONS=true in Vercel')
+    console.error('   Su Vercel imposta SKIP_MIGRATIONS=true e usa solo DATABASE_URL (pooler)')
     exit(1)
   }
   

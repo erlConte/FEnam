@@ -3,6 +3,7 @@
 
 import { prisma } from '../../lib/prisma'
 import { sendSuccess, sendError } from '../../lib/apiHelpers'
+import { getPayPalBaseUrl, isPayPalLive } from '../../lib/paypalEnv'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -51,11 +52,12 @@ export default async function handler(req, res) {
     checks.checks.env = { status: 'ok' }
   }
 
-  // Check PayPal mode (live/sandbox)
+  // Check PayPal mode (live/sandbox) — coerente con PAYPAL_ENV / NODE_ENV
   const paypalClientId = process.env.PAYPAL_CLIENT_ID
   const paypalClientSecret = process.env.PAYPAL_CLIENT_SECRET
   if (paypalClientId && paypalClientSecret) {
-    checks.checks.paypalMode = process.env.NODE_ENV === 'production' ? 'live' : 'sandbox'
+    checks.checks.paypalMode = isPayPalLive() ? 'live' : 'sandbox'
+    checks.checks.paypalBaseUrl = getPayPalBaseUrl()
   } else {
     checks.checks.paypalMode = 'not_configured'
   }

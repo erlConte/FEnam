@@ -15,18 +15,18 @@ const schema = z.object({
   donazione: z
     .union([z.string(), z.number()])
     .transform((val) => {
-      if (val === undefined || val === null || val === '') return 10
+      if (val === undefined || val === null || val === '') return 0
       const num = typeof val === 'string' ? parseFloat(val) : val
-      return isNaN(num) ? 10 : Math.max(10, num)
+      return isNaN(num) ? 0 : num
     })
-    .pipe(z.number().min(10, 'La donazione minima è €10')),
+    .pipe(z.number().min(0, 'La donazione non può essere negativa').max(10000, 'Donazione massima €10.000')),
 })
 
-// Converte donazione da string a numero (vuoto -> 10, default)
+// Converte donazione da string a numero (vuoto -> 0)
 function parseDonazione(donazione) {
-  if (!donazione || donazione === '') return 10
+  if (donazione === undefined || donazione === null || donazione === '') return 0
   const num = parseFloat(donazione)
-  return isNaN(num) ? 10 : Math.max(10, num)
+  return isNaN(num) ? 0 : num
 }
 
 export default function AffiliazioneForm() {
@@ -57,7 +57,7 @@ export default function AffiliazioneForm() {
   } = useForm({ 
     resolver: zodResolver(schema),
     defaultValues: {
-      donazione: '10'
+      donazione: '0'
     }
   })
 
@@ -119,6 +119,7 @@ export default function AffiliazioneForm() {
       onApprove: async (data) => {
         try {
           // Chiama API capture server-side
+          console.log('[Affiliazione] Chiamata capture', { orderID: data.orderID })
           const res = await fetch('/api/affiliazione/capture', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -126,6 +127,21 @@ export default function AffiliazioneForm() {
           })
 
           const json = await res.json()
+          if (res.ok && json.correlationId) {
+            console.log('[Affiliazione] Capture ok', { orderID: data.orderID, correlationId: json.correlationId })
+          }
+
+          // Pagamento non ancora completato (es. PENDING): messaggio chiaro senza panico
+          if (res.ok && json.paypalStatus && json.paypalStatus !== 'COMPLETED') {
+            const msg = json.message || 'PayPal sta processando il pagamento. Riprova tra qualche minuto.'
+            toast.warning(msg)
+            console.warn('[Affiliazione] PayPal status non COMPLETED', {
+              orderID: data.orderID,
+              paypalStatus: json.paypalStatus,
+              correlationId: json.correlationId,
+            })
+            return
+          }
 
           // IMPORTANTE: Verifica res.ok PRIMA di mostrare successo
           // Se res.ok è false, il pagamento PayPal è completato ma il DB update è fallito
@@ -160,7 +176,17 @@ export default function AffiliazioneForm() {
           }
 
           // Solo se res.ok === true, mostra successo
-          toast.success('Affiliazione completata!')
+          if (json.warnings && json.warnings.length > 0) {
+            // Pagamento completato ma side effects con warnings
+            toast.success('Pagamento completato! Email e tessera in invio...')
+            console.warn('[Affiliazione] Warnings:', {
+              orderID: data.orderID,
+              correlationId: json.correlationId,
+              warnings: json.warnings,
+            })
+          } else {
+            toast.success('Affiliazione completata!')
+          }
           
           // Gestione handoff (stessa logica per entrambi i flussi)
           await handleSuccessRedirect(data.orderID)
@@ -230,15 +256,15 @@ export default function AffiliazioneForm() {
         </div>
       ))}
 
-      {/* Donazione obbligatoria */}
+      {/* Donazione (0 = affiliazione gratuita) */}
       <div>
         <label className="mb-1 block text-sm">Donazione (€)</label>
         <input
           {...register('donazione')}
           type="number"
           step="1"
-          min="10"
-          defaultValue="10"
+          min="0"
+          defaultValue="0"
           className="input-field"
         />
         {errors.donazione && (
@@ -252,8 +278,48 @@ export default function AffiliazioneForm() {
       </label>
       {errors.privacy && <p className="mt-1 text-xs text-red-600">{errors.privacy.message}</p>}
 
-      {/* Bottone PayPal */}
-      <div ref={paypalRef} className="w-full" />
+      {/* Se donazione <= 0: pulsante Affiliati gratis; altrimenti PayPal */}
+      {donazioneNum <= 0 ? (
+        <div className="w-full">
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={async () => {
+              const payload = getValues()
+              const body = {
+                ...payload,
+                donazione: 0,
+                privacy: !!payload.privacy,
+              }
+              setIsSubmitting(true)
+              try {
+                const res = await fetch('/api/affiliazione/free', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(body),
+                })
+                const json = await res.json()
+                if (!res.ok) {
+                  toast.error(json.message || json.error || 'Errore affiliazione gratuita')
+                  return
+                }
+                toast.success('Affiliazione completata!')
+                await handleSuccessRedirect(json.memberNumber ? `free-${json.memberNumber}` : 'free')
+              } catch (err) {
+                console.error('[Affiliazione] Errore free:', err)
+                toast.error('Errore di connessione. Riprova.')
+              } finally {
+                setIsSubmitting(false)
+              }
+            }}
+            className="w-full rounded-full bg-primary px-6 py-3 font-semibold text-white shadow hover:bg-primary/90 disabled:opacity-50"
+          >
+            {isSubmitting ? 'Invio in corso...' : 'Affiliati gratis'}
+          </button>
+        </div>
+      ) : (
+        <div ref={paypalRef} className="w-full" />
+      )}
     </form>
   )
 }

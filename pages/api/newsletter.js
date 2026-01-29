@@ -4,8 +4,7 @@ import { Resend } from 'resend'
 import { rateLimit } from '../../lib/rateLimit'
 import { checkMethod, sendError, sendSuccess } from '../../lib/apiHelpers'
 import { handleCors } from '../../lib/cors'
-import { logger } from '../../lib/logger'
-import crypto from 'crypto'
+import { logger, getCorrelationId, maskEmail, logErrorStructured } from '../../lib/logger'
 
 // Inizializza Resend opzionalmente (non blocca startup se manca)
 let resend = null
@@ -44,8 +43,11 @@ export default async function handler(req, res) {
 
   // Verifica RESEND_AUDIENCE_ID configurato (richiesto per aggiungere contatti)
   if (!process.env.RESEND_AUDIENCE_ID) {
-    logger.error('[Newsletter] RESEND_AUDIENCE_ID non configurato')
-    return sendError(res, 503, 'Service unavailable', 'Servizio newsletter momentaneamente non disponibile. Riprova più tardi.')
+    const correlationId = getCorrelationId(req)
+    logger.error('[Newsletter] RESEND_AUDIENCE_ID non configurato', {
+      correlationId,
+    })
+    return sendError(res, 503, 'Service unavailable', 'Servizio newsletter momentaneamente non disponibile. Riprova più tardi.', { correlationId })
   }
 
   // Validazione input
@@ -56,9 +58,9 @@ export default async function handler(req, res) {
   }
   const { email } = parseResult.data
 
-  // Genera correlation ID per tracciare il flusso
-  const correlationId = crypto.randomBytes(8).toString('hex')
-  const logContext = { email: email.substring(0, 3) + '***', correlationId }
+  // Estrai correlation ID da header o genera uno nuovo
+  const correlationId = getCorrelationId(req)
+  const logContext = { email: maskEmail(email), correlationId }
 
   try {
     logger.info('[Newsletter] Inizio aggiunta contatto a Resend Audience', logContext)
@@ -80,11 +82,15 @@ export default async function handler(req, res) {
       return sendSuccess(res, { ok: true, correlationId, alreadySubscribed: true })
     }
 
-    logger.error('[Newsletter] Errore aggiunta contatto Resend', err, {
-      ...logContext,
-      resendErrorStatus: err.response?.status || 'UNKNOWN',
-      resendErrorMessage: err.message || 'UNKNOWN',
-    })
+    logErrorStructured(
+      '[Newsletter] Errore aggiunta contatto Resend',
+      err,
+      {
+        ...logContext,
+        resendErrorStatus: err.response?.status || 'UNKNOWN',
+      },
+      'EMAIL'
+    )
     return sendError(
       res,
       500,

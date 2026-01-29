@@ -5,22 +5,11 @@ import { randomBytes } from 'crypto'
 import { rateLimit } from '../../../lib/rateLimit'
 import { checkMethod, sendError, sendSuccess } from '../../../lib/apiHelpers'
 import { handleCors } from '../../../lib/cors'
-import { logger } from '../../../lib/logger'
+import { logger, getCorrelationId } from '../../../lib/logger'
+import { createPayPalClient } from '../../../lib/paypalEnv'
 
 // Inizializza PayPal client opzionalmente (non blocca startup se manca)
-let client = null
-if (process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET) {
-  const environment = process.env.NODE_ENV === 'production'
-    ? new paypal.core.LiveEnvironment(
-        process.env.PAYPAL_CLIENT_ID,
-        process.env.PAYPAL_CLIENT_SECRET
-      )
-    : new paypal.core.SandboxEnvironment(
-        process.env.PAYPAL_CLIENT_ID,
-        process.env.PAYPAL_CLIENT_SECRET
-      )
-  client = new paypal.core.PayPalHttpClient(environment)
-}
+const { client } = createPayPalClient()
 
 // Schema di validazione Zod
 const affiliationSchema = z.object({
@@ -54,9 +43,9 @@ const affiliationSchema = z.object({
     .transform((val) => {
       if (val === undefined || val === null || val === '') return 10
       const num = typeof val === 'string' ? parseFloat(val) : val
-      return isNaN(num) ? 10 : Math.max(10, num)
+      return isNaN(num) ? 10 : num
     })
-    .pipe(z.number().min(10, 'La donazione minima è €10').max(10000, 'Donazione massima €10.000')),
+    .pipe(z.number().min(0, 'La donazione non può essere negativa').max(10000, 'Donazione massima €10.000')),
 })
 
 export default async function handler(req, res) {
@@ -91,20 +80,19 @@ export default async function handler(req, res) {
 
   const { nome, cognome, email, telefono, privacy, donazione } = parseResult.data
 
-  // Verifica che donazione sia >= 10
-  if (!donazione || donazione < 10) {
-    return sendError(res, 400, 'Invalid donation', 'La donazione minima è €10', [
-      { path: ['donazione'], message: 'La donazione minima è €10' }
+  // Donazione 0: non passare da PayPal, usare /api/affiliazione/free
+  if (donazione === 0) {
+    return sendError(res, 400, 'Invalid donation', 'Donazione 0: usa /api/affiliazione/free', [
+      { path: ['donazione'], message: 'Donazione 0: usa /api/affiliazione/free' }
     ])
   }
 
-  // Calcolo importo (solo donazione, quota base rimossa)
-  const total = Math.round(donazione * 100) / 100 // rounding a 2 decimali
+  // Calcolo importo (solo donazione)
+  const total = Math.round(donazione * 100) / 100
 
-  // Validazione total
-  if (total < 10) {
-    return sendError(res, 400, 'Invalid amount', 'La donazione minima è €10', [
-      { path: ['donazione'], message: 'La donazione minima è €10' }
+  if (total <= 0) {
+    return sendError(res, 400, 'Invalid amount', 'Donazione 0: usa /api/affiliazione/free', [
+      { path: ['donazione'], message: 'Donazione 0: usa /api/affiliazione/free' }
     ])
   }
   if (total > 10000) {
@@ -114,6 +102,10 @@ export default async function handler(req, res) {
   }
 
   const totalFormatted = total.toFixed(2) // string "xx.xx"
+  const currency = 'EUR'
+
+  // Correlation ID per tracciabilità (stesso stile di capture)
+  const correlationId = getCorrelationId(req)
 
   // 3) Genera identificatore interno per reference_id
   const internalRef = randomBytes(8).toString('hex')
@@ -138,6 +130,14 @@ export default async function handler(req, res) {
 
     const order = await client.execute(request)
     const orderId = order.result.id
+
+    // Log: correlationId, amount, currency, orderID (senza dati sensibili)
+    logger.info('[PayPal API] Ordine creato', {
+      correlationId,
+      amount: totalFormatted,
+      currency,
+      orderID: orderId,
+    })
 
     // 5) Persistenza su DB con idempotenza
     try {
