@@ -29,14 +29,8 @@ function parseDonazione(donazione) {
   return isNaN(num) ? 0 : num
 }
 
-// Free abilitato solo in development o se esplicitamente consentito via env (es. Preview)
-const freeEnabled =
-  process.env.NODE_ENV === 'development' ||
-  process.env.NEXT_PUBLIC_ALLOW_FREE_AFFILIATION === 'true'
-
 export default function AffiliazioneForm() {
   const [sdkReady, setSdkReady] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const paypalRef = useRef(null)
   const handoffParamsRef = useRef({ returnUrl: null, source: null })
   const router = useRouter()
@@ -294,47 +288,9 @@ export default function AffiliazioneForm() {
       </label>
       {errors.privacy && <p className="mt-1 text-xs text-red-600">{errors.privacy.message}</p>}
 
-      {/* CTA: free solo se freeEnabled e donazione===0; PayPal solo se donazione>=10; altrimenti nessuna CTA */}
+      {/* CTA: solo PayPal se donazione >= 10; altrimenti nessuna CTA */}
       {donazioneNum >= 10 ? (
         <div ref={paypalRef} className="w-full" />
-      ) : donazioneNum === 0 && freeEnabled ? (
-        <div className="w-full">
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={async () => {
-              const payload = getValues()
-              const body = {
-                ...payload,
-                donazione: 0,
-                privacy: !!payload.privacy,
-              }
-              setIsSubmitting(true)
-              try {
-                const res = await fetch('/api/affiliazione/free', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(body),
-                })
-                const json = await res.json()
-                if (!res.ok) {
-                  toast.error(json.message || json.error || 'Errore affiliazione gratuita')
-                  return
-                }
-                toast.success('Affiliazione completata!')
-                await handleSuccessRedirect(json.memberNumber ? `free-${json.memberNumber}` : 'free')
-              } catch (err) {
-                console.error('[Affiliazione] Errore free:', err)
-                toast.error('Errore di connessione. Riprova.')
-              } finally {
-                setIsSubmitting(false)
-              }
-            }}
-            className="w-full rounded-full bg-primary px-6 py-3 font-semibold text-white shadow hover:bg-primary/90 disabled:opacity-50"
-          >
-            {isSubmitting ? 'Invio in corso...' : 'Affiliati gratis'}
-          </button>
-        </div>
       ) : null}
     </form>
   )

@@ -80,21 +80,9 @@ export default async function handler(req, res) {
 
   const { nome, cognome, email, telefono, privacy, donazione } = parseResult.data
 
-  // Donazione 0: non passare da PayPal, usare /api/affiliazione/free
-  if (donazione === 0) {
-    return sendError(res, 400, 'Invalid donation', 'Donazione 0: usa /api/affiliazione/free', [
-      { path: ['donazione'], message: 'Donazione 0: usa /api/affiliazione/free' }
-    ])
-  }
-
-  // Calcolo importo (solo donazione)
+  // Calcolo importo (donazione minima 10€)
   const total = Math.round(donazione * 100) / 100
 
-  if (total <= 0) {
-    return sendError(res, 400, 'Invalid amount', 'Donazione 0: usa /api/affiliazione/free', [
-      { path: ['donazione'], message: 'Donazione 0: usa /api/affiliazione/free' }
-    ])
-  }
   if (total < 10) {
     return sendError(res, 400, 'Invalid amount', 'Importo minimo 10€', [
       { path: ['donazione'], message: 'Importo minimo 10€' }
