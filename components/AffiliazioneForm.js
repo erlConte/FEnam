@@ -141,7 +141,24 @@ export default function AffiliazioneForm() {
             body: JSON.stringify(captureBody),
           })
 
-          const json = await res.json()
+          const contentType = res.headers.get('content-type') || ''
+          if (res.ok && contentType.includes('text/html')) {
+            const html = await res.text()
+            document.open()
+            document.write(html)
+            document.close()
+            return
+          }
+
+          let json
+          try {
+            json = await res.json()
+          } catch (parseErr) {
+            console.error('[Affiliazione] Capture response non JSON', parseErr)
+            toast.error('Errore durante la conferma del pagamento.')
+            return
+          }
+
           if (res.ok && json.correlationId) {
             console.log('[Affiliazione] Capture completata', { orderID: data.orderID, correlationId: json.correlationId })
           } else {
