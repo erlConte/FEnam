@@ -129,6 +129,23 @@ export default async function handler(req, res) {
     currency,
   })
 
+  // Impedire affiliazioni duplicate attive: stessa email, completed, memberUntil > now
+  const existing = await prisma.affiliation.findFirst({
+    where: {
+      email: email.toLowerCase(),
+      status: 'completed',
+      memberUntil: { gt: new Date() },
+    },
+  })
+  if (existing) {
+    return sendError(
+      res,
+      409,
+      'Already affiliated',
+      'Risulti già affiliato. La tua tessera è ancora valida.'
+    )
+  }
+
   // 2) Crea ordine PayPal (intent CAPTURE)
   const internalRef = randomBytes(8).toString('hex')
   try {
