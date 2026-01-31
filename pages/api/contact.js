@@ -45,6 +45,22 @@ export default async function handler(req, res) {
   }
   const { nome, cognome, telefono, email, messaggio } = parse.data
 
+  // Escape HTML per evitare XSS nel corpo email (admin legge via client email)
+  const escapeHtml = (s) =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+  const safe = {
+    nome: escapeHtml(nome),
+    cognome: escapeHtml(cognome),
+    telefono: escapeHtml(telefono ?? ''),
+    email: escapeHtml(email),
+    messaggio: escapeHtml(messaggio),
+  }
+
   // Verifica Resend configurato
   if (!resend) {
     logger.error('[Contact API] RESEND_API_KEY o SENDER_EMAIL non configurati')
@@ -67,13 +83,13 @@ export default async function handler(req, res) {
       subject: `Richiesta da ${nome} ${cognome}`,
       html: `
         <h2>Nuova richiesta di contatto</h2>
-        <p><strong>Nome:</strong> ${nome}</p>
-        <p><strong>Cognome:</strong> ${cognome}</p>
-        <p><strong>Telefono:</strong> ${telefono || '-'}</p>
-        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Nome:</strong> ${safe.nome}</p>
+        <p><strong>Cognome:</strong> ${safe.cognome}</p>
+        <p><strong>Telefono:</strong> ${safe.telefono || '-'}</p>
+        <p><strong>Email:</strong> ${safe.email}</p>
         <hr/>
         <p><strong>Messaggio:</strong></p>
-        <p>${messaggio.replace(/\n/g, '<br/>')}</p>
+        <p>${safe.messaggio.replace(/\n/g, '<br/>')}</p>
       `,
       text: `
 Nuova richiesta di contatto

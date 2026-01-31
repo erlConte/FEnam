@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     checks.status = 'degraded'
   }
 
-  // Check env vars critiche (senza esporre valori)
+  // Check env vars critiche (senza esporre valori). FENAM_HANDOFF_SECRET opzionale (solo se handoff usato).
   const requiredEnvVars = [
     'DATABASE_URL',
     'PAYPAL_CLIENT_ID',
@@ -36,7 +36,6 @@ export default async function handler(req, res) {
     'ADMIN_TOKEN',
     'NEXT_PUBLIC_PAYPAL_CLIENT_ID',
     'NEXT_PUBLIC_BASE_URL',
-    'FENAM_HANDOFF_SECRET',
     'RESEND_API_KEY',
     'SENDER_EMAIL',
   ]
@@ -50,6 +49,12 @@ export default async function handler(req, res) {
     checks.status = 'degraded'
   } else {
     checks.checks.env = { status: 'ok' }
+  }
+
+  // Handoff: opzionale (degraded se ENOTEMPO_HANDOFF_URL impostato ma FENAM_HANDOFF_SECRET manca)
+  if (process.env.ENOTEMPO_HANDOFF_URL && !process.env.FENAM_HANDOFF_SECRET) {
+    checks.checks.handoffSecret = { status: 'missing_but_handoff_url_set' }
+    checks.status = 'degraded'
   }
 
   // Check PayPal mode (live/sandbox) — coerente con PAYPAL_ENV / NODE_ENV
@@ -86,11 +91,10 @@ export default async function handler(req, res) {
   // Check env vars opzionali
   const optionalEnvVars = {
     ENOTEMPO_HANDOFF_URL: process.env.ENOTEMPO_HANDOFF_URL ? 'configured' : 'not_configured',
+    FENAM_HANDOFF_SECRET: process.env.FENAM_HANDOFF_SECRET ? 'configured' : 'not_configured',
   }
   checks.checks.optionalEnv = optionalEnvVars
-  
-  // Check handoff configuration (già presente in optionalEnv, ma aggiungiamo anche qui per chiarezza)
-  checks.checks.handoffConfigured = !!process.env.ENOTEMPO_HANDOFF_URL
+  checks.checks.handoffConfigured = !!(process.env.ENOTEMPO_HANDOFF_URL && process.env.FENAM_HANDOFF_SECRET)
 
   // Check Redis (opzionale, non blocca se manca)
   if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {

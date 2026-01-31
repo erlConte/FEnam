@@ -15,7 +15,8 @@ import crypto from 'crypto'
 // Inizializza PayPal client (stesso env di paypal.js: PAYPAL_ENV / NODE_ENV, base URL in log)
 const { client } = createPayPalClient()
 
-// Schema di validazione Zod (campi opzionali per recovery: affiliation non trovata in DB)
+// Schema: orderID obbligatorio (fonte primaria); nome/cognome/email/telefono/privacy opzionali solo per recovery se record non in DB.
+// TODO P1: Se PayPal richiede allowlist IP è setting account; in serverless non controlli facilmente IP.
 const captureSchema = z.object({
   orderID: z
     .string()
@@ -55,6 +56,10 @@ export default async function handler(req, res) {
   const parseResult = captureSchema.safeParse(req.body)
   if (!parseResult.success) {
     const firstError = parseResult.error.errors[0]
+    logger.warn('[PayPal Capture] Validazione fallita', {
+      orderID: req.body?.orderID ? 'presente' : 'mancante',
+      category: 'VALIDATION',
+    })
     return sendError(res, 400, firstError.message || 'Validation error', null, parseResult.error.errors)
   }
 
@@ -73,34 +78,67 @@ export default async function handler(req, res) {
     paypalMode,
   })
 
+  // Flusso esplicito: 1) Capture ordine (o GET se già catturato) 2) Se COMPLETED: aggiorna DB (idempotente) 3) Side effects (PDF + email) 4) Handoff se configurato
+  let order
   try {
-    logger.info('[PayPal Capture] Inizio processamento ordine', logContext)
+    logger.info('[PayPal Capture] Step 1: PayPal capture', { ...logContext, paypalBaseUrl, paypalMode })
+    const captureRequest = new paypal.orders.OrdersCaptureRequest(orderID)
+    const captureResponse = await client.execute(captureRequest)
+    order = captureResponse.result
+  } catch (captureErr) {
+    // Ordine già catturato? GET e sincronizza (idempotente)
+    const isAlreadyCaptured =
+      captureErr.statusCode === 422 ||
+      (captureErr.message && String(captureErr.message).toUpperCase().includes('ORDER_ALREADY_CAPTURED'))
+    if (isAlreadyCaptured) {
+      try {
+        const getRequest = new paypal.orders.OrdersGetRequest(orderID)
+        const getResponse = await client.execute(getRequest)
+        order = getResponse.result
+        if (order.status !== 'COMPLETED') {
+          logger.warn('[PayPal Capture] GET order after already-captured: status non COMPLETED', {
+            orderID,
+            correlationId,
+            paypalStatus: order.status || 'UNKNOWN',
+          })
+          return sendError(res, 502, 'PayPal error', 'Ordine non completato su PayPal.', { orderID, correlationId })
+        }
+        logger.info('[PayPal Capture] Ordine già catturato, sincronizzo da GET', {
+          orderID,
+          correlationId,
+          paypalStatus: order.status,
+        })
+      } catch (getErr) {
+        logErrorStructured('[PayPal Capture] GET order fallito dopo capture error', getErr, logContext, 'PAYPAL_API')
+        return sendError(res, 502, 'PayPal error', 'Errore durante verifica ordine PayPal.', { orderID, correlationId })
+      }
+    } else {
+      logErrorStructured('[PayPal Capture] Errore PayPal SDK', captureErr, {
+        ...logContext,
+        statusCode: captureErr.statusCode,
+      }, 'PAYPAL_API')
+      return sendError(res, 502, 'PayPal error', 'Errore durante il processamento del pagamento PayPal.', {
+        orderID,
+        correlationId,
+      })
+    }
+  }
 
-    // ============================================
-    // STEP 1: PayPal Capture (SOLO rete/PayPal)
-    // ============================================
-    const request = new paypal.orders.OrdersCaptureRequest(orderID)
-    const captureResponse = await client.execute(request)
-    const order = captureResponse.result
+  const status = order.status || 'UNKNOWN'
+  const reason = order.details?.[0]?.issue || order.message || null
+  const debugId = order.debug_id ?? order.details?.[0]?.debug_id ?? null
+  logger.info('[PayPal Capture] PayPal response', {
+    orderID,
+    correlationId,
+    paypalBaseUrl,
+    paypalMode,
+    paypalStatus: status,
+    ...(reason && { reason }),
+    ...(debugId && { debug_id: debugId }),
+  })
 
-    // Log risposta PayPal: HTTP status, paypalStatus, eventuali reason/debug_id (senza email/token/secret)
-    const status = order.status || 'UNKNOWN'
-    const httpStatus = captureResponse.statusCode ?? null
-    const reason = order.details?.[0]?.issue || order.message || null
-    const debugId = order.debug_id ?? order.details?.[0]?.debug_id ?? null
-    logger.info('[PayPal Capture] PayPal capture response', {
-      orderID,
-      correlationId,
-      paypalBaseUrl: getPayPalBaseUrl(),
-      paypalMode: isPayPalLive() ? 'live' : 'sandbox',
-      paypalHttpStatus: httpStatus,
-      paypalStatus: status,
-      ...(reason && { reason }),
-      ...(debugId && { debug_id: debugId }),
-    })
-
-    // Se PayPal non ha restituito COMPLETED: non completare affiliazione, salva debug e ritorna 200 con messaggio
-    if (status !== 'COMPLETED') {
+  // Se PayPal non ha restituito COMPLETED: non completare affiliazione, salva debug e ritorna 200 con messaggio
+  if (status !== 'COMPLETED') {
       const existingForDebug = await prisma.affiliation.findUnique({
         where: { orderId: orderID },
         select: { id: true },
@@ -237,17 +275,17 @@ export default async function handler(req, res) {
     const isNewlyCompleted = existingAffiliation.status !== 'completed'
 
     if (!isNewlyCompleted) {
-      // Già completata: ritorna successo senza side effects
       logger.info('[PayPal Capture] Affiliazione già completata (idempotente)', {
         ...logContext,
         affiliationId: existingAffiliation.id,
+        dbStatusBefore: existingAffiliation.status,
         memberNumber: existingAffiliation.memberNumber,
         emailSent: !!existingAffiliation.confirmationEmailSentAt,
         cardSent: !!existingAffiliation.membershipCardSentAt,
       })
-      
       return sendSuccess(res, {
         ok: true,
+        already_completed: true,
         status: 'completed',
         orderID,
         message: 'Affiliazione già completata',
@@ -257,15 +295,14 @@ export default async function handler(req, res) {
       })
     }
 
-    // ============================================
-    // STEP 3: DB Update - CRITICO (payment-first)
-    // ============================================
-    // Questo DEVE completare SEMPRE dopo PayPal capture success
+    // STEP 3: DB Update - CRITICO (payment-first). Idempotente: non rollback se side effects falliscono.
+    const dbStatusBefore = existingAffiliation.status
     let dbResult
     try {
-      logger.info('[PayPal Capture] Marca affiliazione come completed', {
+      logger.info('[PayPal Capture] Step 3: Marca affiliazione completed', {
         ...logContext,
         affiliationId: existingAffiliation.id,
+        dbStatusBefore,
       })
       
       dbResult = await markAffiliationCompleted({
@@ -296,7 +333,8 @@ export default async function handler(req, res) {
         orderID,
         correlationId,
         affiliationId: existingAffiliation.id,
-        status: afterMark?.status ?? null,
+        dbStatusBefore,
+        dbStatusAfter: afterMark?.status ?? null,
         memberNumber: afterMark?.memberNumber ?? null,
       })
       if (process.env.LOG_LEVEL === 'debug') {
@@ -309,19 +347,29 @@ export default async function handler(req, res) {
         })
       }
     } catch (dbError) {
-      // ERRORE CRITICO: PayPal capture è avvenuto ma DB update è fallito
       logErrorStructured(
         '[PayPal Capture] ERRORE CRITICO: DB update fallito dopo PayPal capture',
         dbError,
         {
           ...logContext,
           affiliationId: existingAffiliation.id,
-          errorType: 'DB_ERROR',
+          dbStatusBefore,
         },
         'DB_CONN'
       )
-      
-      // Ritorna errore 500: pagamento completato ma DB non aggiornato
+      // Salva su DB che PayPal era COMPLETED (per recovery/debug): usiamo colonne esistenti
+      try {
+        await prisma.affiliation.update({
+          where: { id: existingAffiliation.id },
+          data: { lastPaypalStatus: 'COMPLETED', lastPaypalCheckedAt: new Date() },
+        })
+      } catch (updateDebugErr) {
+        logger.warn('[PayPal Capture] Impossibile salvare lastPaypalStatus per recovery', {
+          orderID,
+          correlationId,
+          affiliationId: existingAffiliation.id,
+        })
+      }
       return sendError(
         res,
         500,
@@ -386,18 +434,17 @@ export default async function handler(req, res) {
     // STEP 5: Risposta finale
     // ============================================
 
-    // Log informazioni capture (senza dati sensibili)
+    const handoffSent = !!process.env.ENOTEMPO_HANDOFF_URL
     logger.info('[PayPal Capture] Order completato con successo', {
       ...logContext,
-      status,
-      captureId: captureId ? 'presente' : 'non disponibile',
-      amount: amount ? 'presente' : 'non disponibile',
-      currency: currency || 'non disponibile',
-      memberNumber: dbResult.memberNumber || 'non generato',
-      emailSent: sideEffectsResult.emailSent,
-      cardSent: sideEffectsResult.cardSent,
-      warnings: sideEffectsResult.warnings.length > 0 ? sideEffectsResult.warnings : undefined,
+      paypalStatus: status,
       affiliationId: updatedAffiliation.id,
+      dbStatusAfter: updatedAffiliation.status ?? null,
+      pdfGenerated: sideEffectsResult.cardSent,
+      emailSent: sideEffectsResult.emailSent,
+      handoffSent,
+      memberNumber: dbResult.memberNumber || 'non generato',
+      warnings: sideEffectsResult.warnings.length > 0 ? sideEffectsResult.warnings : undefined,
     })
 
     // Verifica se handoff automatico è configurato
@@ -663,38 +710,4 @@ export default async function handler(req, res) {
     }
     
     return sendSuccess(res, response)
-  } catch (paypalError) {
-    // Errore PayPal SDK: log dettagliato (senza esporre secret)
-    // Questo catch gestisce SOLO errori dalla chiamata PayPal SDK (riga 81)
-    logErrorStructured(
-      '[PayPal Capture] Errore PayPal SDK',
-      paypalError,
-      {
-        ...logContext,
-        statusCode: paypalError.statusCode,
-        errorType: 'PAYPAL_SDK_ERROR',
-      },
-      'PAYPAL'
-    )
-
-    // Se l'errore è specifico (es. order già catturato), possiamo gestirlo meglio
-    if (paypalError.statusCode === 422) {
-      // 422 = Unprocessable Entity (es. order già catturato o non valido)
-      return sendError(
-        res,
-        502,
-        'PayPal error',
-        'Ordine non valido o già processato',
-        { orderID, correlationId }
-      )
-    }
-
-    return sendError(
-      res,
-      502,
-      'PayPal error',
-      'Errore durante il processamento del pagamento PayPal',
-      { orderID, correlationId }
-    )
-  }
 }

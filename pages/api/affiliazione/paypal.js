@@ -11,6 +11,12 @@ import { createPayPalClient, getPayPalBaseUrl, isPayPalLive } from '../../../lib
 // Inizializza PayPal client opzionalmente (non blocca startup se manca)
 const { client } = createPayPalClient()
 
+// Flusso esplicito: 1) valida input 2) crea ordine PayPal (intent CAPTURE) 3) crea record Affiliation pending 4) ritorna orderID
+// TODO P0: Verificare che NEXT_PUBLIC_PAYPAL_CLIENT_ID === PAYPAL_CLIENT_ID (stesso ambiente sandbox/live).
+// TODO P1: PAYPAL_ENV sbagliato (es. production in preview) forza modalità errata; controllare in Vercel.
+// TODO P1: Se il conto PayPal non accetta currency/amount (es. EUR o importo), l'ordine fallirà; messaggio da PayPal in log.
+// TODO P1: "Donazione" è concettuale: l'ordine è un pagamento normale PayPal; ricevuta/descrizione da allineare a branding.
+
 // Schema di validazione Zod
 const affiliationSchema = z.object({
   nome: z
@@ -108,18 +114,27 @@ export default async function handler(req, res) {
 
   const totalFormatted = total.toFixed(2) // string "xx.xx"
   const currency = 'EUR'
+  const intent = 'CAPTURE'
 
-  // Correlation ID per tracciabilità (stesso stile di capture)
   const correlationId = getCorrelationId(req)
+  const paypalBaseUrl = getPayPalBaseUrl()
+  const paypalMode = isPayPalLive() ? 'live' : 'sandbox'
 
-  // 3) Genera identificatore interno per reference_id
+  logger.info('[PayPal API] Create order start', {
+    correlationId,
+    paypalBaseUrl,
+    paypalMode,
+    intent,
+    amount: totalFormatted,
+    currency,
+  })
+
+  // 2) Crea ordine PayPal (intent CAPTURE)
   const internalRef = randomBytes(8).toString('hex')
-
   try {
-    // 4) Crea ordine PayPal
     const request = new paypal.orders.OrdersCreateRequest()
     request.requestBody({
-      intent: 'CAPTURE',
+      intent,
       purchase_units: [
         {
           reference_id: internalRef,
@@ -136,20 +151,18 @@ export default async function handler(req, res) {
     const order = await client.execute(request)
     const orderId = order.result.id
 
-    // Log create-order: paypalBaseUrl, paypalMode, intent, amount, currency, orderID, correlationId (senza segreti)
-    const paypalBaseUrl = getPayPalBaseUrl()
-    const paypalMode = isPayPalLive() ? 'live' : 'sandbox'
     logger.info('[PayPal API] Ordine creato', {
+      correlationId,
       paypalBaseUrl,
       paypalMode,
-      intent: 'CAPTURE',
+      intent,
       amount: totalFormatted,
       currency,
       orderID: orderId,
-      correlationId,
     })
 
-    // 5) Persistenza su DB con idempotenza
+    // 3) Crea record Affiliation pending (orderId + metadata utili; importo/currency non in schema, solo in PayPal)
+    // Idempotenza: se orderId già presente (duplicato) restituiamo comunque orderID
     try {
       await prisma.affiliation.create({
         data: {
@@ -173,10 +186,14 @@ export default async function handler(req, res) {
       }
     }
 
+    // 4) Ritorna orderID
     return sendSuccess(res, { orderID: orderId })
   } catch (paypalError) {
-    // Errore PayPal: log dettagliato (senza esporre secret)
     logger.error('[PayPal API] PayPal error', paypalError, {
+      correlationId,
+      paypalBaseUrl,
+      paypalMode,
+      category: 'PAYPAL_API',
       statusCode: paypalError.statusCode,
     })
     return sendError(res, 502, 'PayPal error', 'Errore durante la creazione dell\'ordine PayPal')

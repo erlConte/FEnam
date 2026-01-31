@@ -17,6 +17,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  if (!process.env.FENAM_HANDOFF_SECRET || process.env.FENAM_HANDOFF_SECRET.trim() === '') {
+    return res.status(503).json({
+      error: 'Service unavailable',
+      message: 'Handoff non configurato (FENAM_HANDOFF_SECRET mancante)',
+    })
+  }
+
   let orderIDForLog = null
 
   try {
