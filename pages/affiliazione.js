@@ -10,9 +10,9 @@ export default function Affiliazione() {
   const returnUrl = typeof returnParam === 'string' ? returnParam : ''
   const fromEnotempo = source === 'enotempo'
 
-  const accediSocioHref = returnUrl
-    ? `/accedi-socio?returnUrl=${encodeURIComponent(returnUrl)}&source=enotempo`
-    : '/accedi-socio?source=enotempo'
+  const accediSocioHref = fromEnotempo && returnUrl
+    ? `/accedi-socio?source=enotempo&returnUrl=${encodeURIComponent(returnUrl)}`
+    : '/accedi-socio?source=fenam'
 
   return (
     <>

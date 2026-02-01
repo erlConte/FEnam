@@ -57,15 +57,20 @@ export default async function handler(req, res) {
     return sendError(res, 400, first.message || 'Validazione fallita', null, parseResult.error.errors)
   }
 
-  const { email, returnUrl: rawReturnUrl, source } = parseResult.data
+  const { email, returnUrl: rawReturnUrl, source: rawSource } = parseResult.data
+  const source = (rawSource != null && String(rawSource).trim() !== '')
+    ? String(rawSource).trim().toLowerCase()
+    : 'fenam'
 
-  // Valida returnUrl prima di generare token/email: solo URL valide (HTTPS + allowlist)
+  // Se source=enotempo richiedi returnUrl valida; altrimenti returnUrl opzionale
   let safeReturnUrl = null
   if (rawReturnUrl != null && String(rawReturnUrl).trim() !== '') {
     safeReturnUrl = getSafeReturnUrl(String(rawReturnUrl).trim())
-    if (!safeReturnUrl) {
-      return sendError(res, 400, 'URL di ritorno non valido', 'L’URL di ritorno deve essere HTTPS e il dominio deve essere tra quelli consentiti. Verifica il link o contatta il supporto.')
+    if (source === 'enotempo' && !safeReturnUrl) {
+      return sendError(res, 400, 'URL di ritorno non valido', 'Per tornare su Enotempo è necessario un URL di ritorno valido (HTTPS e dominio consentito). Verifica il link o contatta il supporto.')
     }
+  } else if (source === 'enotempo') {
+    return sendError(res, 400, 'URL di ritorno mancante', 'Per tornare su Enotempo è necessario fornire l’URL di ritorno.')
   }
 
   const now = new Date()
@@ -124,10 +129,10 @@ export default async function handler(req, res) {
   const verifyPath = '/api/socio/login/verify'
   const verifyUrl = new URL(verifyPath, BASE_URL)
   verifyUrl.searchParams.set('token', rawToken)
+  verifyUrl.searchParams.set('source', source)
   if (safeReturnUrl) {
     verifyUrl.searchParams.set('returnUrl', safeReturnUrl)
   }
-  if (source) verifyUrl.searchParams.set('source', source)
 
   if (RESEND_API_KEY && SENDER_EMAIL) {
     try {

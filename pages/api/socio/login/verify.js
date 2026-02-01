@@ -1,6 +1,7 @@
 // GET /api/socio/login/verify — Verifica magic link, marca usato, genera handoff e redirect
 // Query: token, returnUrl?, source?
-// Token monouso: hash in DB, usedAt marcato in transazione. Nessun PII nei log.
+// Redirect: in base a source (enotempo → returnUrl valida con token; fenam/altro → /accedi-socio?success=1).
+// Token monouso: hash in DB, usedAt in transazione. Nessun PII nei log.
 
 import crypto from 'crypto'
 import { prisma } from '../../../../lib/prisma'
@@ -31,6 +32,8 @@ export default async function handler(req, res) {
       returnUrl = req.query.returnUrl
     }
   }
+
+  const src = (source || 'fenam').toLowerCase().trim()
 
   if (!token) {
     return res.redirect(302, '/accedi-socio?error=missing_token')
@@ -66,24 +69,27 @@ export default async function handler(req, res) {
     return res.redirect(302, '/accedi-socio?error=membership_expired')
   }
 
-  const safeReturnUrl = getSafeReturnUrl(returnUrl)
-  if (!safeReturnUrl) {
-    return res.redirect(302, '/accedi-socio?error=invalid_return')
-  }
-
   const now = Math.floor(Date.now() / 1000)
   const exp = now + TOKEN_EXPIRY_SECONDS
   const payload = {
     sub: affiliation.memberNumber || affiliation.id,
-    src: source || 'enotempo',
+    src: src === 'enotempo' ? 'enotempo' : 'fenam',
     iat: now,
     exp,
   }
   const handoffToken = createHandoffToken(payload)
 
-  const redirectUrl = new URL(safeReturnUrl)
-  redirectUrl.searchParams.set('status', 'success')
-  redirectUrl.searchParams.set('token', handoffToken)
+  if (src === 'enotempo') {
+    const safeReturnUrl = getSafeReturnUrl(returnUrl)
+    if (!safeReturnUrl) {
+      return res.redirect(302, '/accedi-socio?error=invalid_return')
+    }
+    const redirectUrl = new URL(safeReturnUrl)
+    redirectUrl.searchParams.set('status', 'success')
+    redirectUrl.searchParams.set('token', handoffToken)
+    return res.redirect(302, redirectUrl.toString())
+  }
 
-  return res.redirect(302, redirectUrl.toString())
+  // source !== enotempo (fenam o altro): redirect interno FENAM, non serve returnUrl
+  return res.redirect(302, '/accedi-socio?success=1')
 }
