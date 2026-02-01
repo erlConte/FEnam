@@ -5,7 +5,6 @@ import { useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
-import { COOKIE_NAME, verifyMemberSessionToken } from '../lib/memberSession'
 
 function getCookieValue(cookieHeader, name) {
   if (!cookieHeader || typeof cookieHeader !== 'string') return null
@@ -14,6 +13,7 @@ function getCookieValue(cookieHeader, name) {
 }
 
 export async function getServerSideProps(context) {
+  const { COOKIE_NAME, verifyMemberSessionToken } = await import('../lib/memberSession')
   const cookieHeader = context.req?.headers?.cookie ?? null
   const token = getCookieValue(cookieHeader, COOKIE_NAME)
   const isMemberVerified = token ? !!verifyMemberSessionToken(token) : false
