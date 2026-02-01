@@ -13,7 +13,8 @@ import { logger } from '../../../../lib/logger'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const SENDER_EMAIL = process.env.SENDER_EMAIL || 'noreply@fenam.website'
-const BASE_URL = process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'
+// Canonico senza www: link email usa solo BASE_URL da env, mai req.headers.host
+const BASE_URL = process.env.BASE_URL || 'https://fenam.website'
 
 const requestSchema = z.object({
   email: z

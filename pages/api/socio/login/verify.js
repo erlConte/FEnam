@@ -7,9 +7,18 @@ import crypto from 'crypto'
 import { prisma } from '../../../../lib/prisma'
 import { createHandoffToken } from '../../../../lib/handoffToken'
 import { getSafeReturnUrl } from '../../../../lib/validateReturnUrl'
+import {
+  COOKIE_NAME,
+  createMemberSessionToken,
+  getCookieOptions,
+  formatSetCookie,
+  getRequestHost,
+} from '../../../../lib/memberSession'
 import { logger } from '../../../../lib/logger'
 
 const TOKEN_EXPIRY_SECONDS = 600 // 10 min per handoff
+const MEMBER_SESSION_DAYS = 30
+const MEMBER_SESSION_MAX_AGE = MEMBER_SESSION_DAYS * 24 * 60 * 60
 
 function sha256hex(input) {
   return crypto.createHash('sha256').update(input).digest('hex')
@@ -79,6 +88,20 @@ export default async function handler(req, res) {
   }
   const handoffToken = createHandoffToken(payload)
 
+  // Set-Cookie PRIMA di qualsiasi redirect; host da x-forwarded-host per proxy/Vercel
+  const host = getRequestHost(req)
+  try {
+    const sessionExp = now + MEMBER_SESSION_MAX_AGE
+    const memberSessionToken = createMemberSessionToken({
+      affiliationId: affiliation.id,
+      exp: sessionExp,
+    })
+    const cookieOpts = getCookieOptions({ maxAgeSeconds: MEMBER_SESSION_MAX_AGE, host })
+    res.setHeader('Set-Cookie', formatSetCookie(COOKIE_NAME, memberSessionToken, cookieOpts))
+  } catch (sessionErr) {
+    logger.warn('[Socio Login Verify] Member session non impostata', sessionErr?.message || sessionErr)
+  }
+
   if (src === 'enotempo') {
     const safeReturnUrl = getSafeReturnUrl(returnUrl)
     if (!safeReturnUrl) {
@@ -90,6 +113,6 @@ export default async function handler(req, res) {
     return res.redirect(302, redirectUrl.toString())
   }
 
-  // source !== enotempo (fenam o altro): redirect interno FENAM, non serve returnUrl
+  // source !== enotempo (fenam o altro): redirect interno FENAM (cookie già impostato)
   return res.redirect(302, '/accedi-socio?success=1')
 }

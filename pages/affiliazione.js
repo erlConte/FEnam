@@ -3,19 +3,32 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import AffiliazioneForm from '../components/AffiliazioneForm'
+import { COOKIE_NAME, verifyMemberSessionToken } from '../lib/memberSession'
 
-export default function Affiliazione() {
+function getCookieValue(cookieHeader, name) {
+  if (!cookieHeader || typeof cookieHeader !== 'string') return null
+  const match = cookieHeader.match(new RegExp(`(?:^|;)\\s*${name}=([^;]*)`))
+  return match ? decodeURIComponent(match[1].trim()) : null
+}
+
+export async function getServerSideProps(context) {
+  const cookieHeader = context.req?.headers?.cookie ?? null
+  const token = getCookieValue(cookieHeader, COOKIE_NAME)
+  const isMemberVerified = token ? !!verifyMemberSessionToken(token) : false
+  return { props: { isMemberVerified } }
+}
+
+export default function Affiliazione({ isMemberVerified }) {
   const router = useRouter()
   const { return: returnParam, source } = router.query
   const returnUrl = typeof returnParam === 'string' ? returnParam : ''
   const fromEnotempo = source === 'enotempo'
-  const isAlreadySocio = router.query.success === '1'
 
   const accediSocioHref = fromEnotempo && returnUrl
     ? `/accedi-socio?source=enotempo&returnUrl=${encodeURIComponent(returnUrl)}`
     : '/accedi-socio?source=fenam'
 
-  if (isAlreadySocio) {
+  if (isMemberVerified) {
     return (
       <>
         <Head><title>Affiliazione | FENAM</title></Head>
@@ -33,12 +46,20 @@ export default function Affiliazione() {
               <p className="text-sm text-secondary/80 mb-6">
                 Puoi continuare la navigazione sul sito o accedere come socio se provieni da un servizio partner.
               </p>
-              <Link
-                href="/"
-                className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-              >
-                Torna alla home
-              </Link>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link
+                  href="/"
+                  className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                >
+                  Torna alla home
+                </Link>
+                <a
+                  href="/api/socio/logout"
+                  className="inline-flex items-center justify-center rounded-full border-2 border-secondary/30 px-5 py-2.5 text-sm font-semibold text-secondary hover:bg-secondary/5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                >
+                  Esci dalla sessione socio
+                </a>
+              </div>
             </div>
           </div>
         </section>

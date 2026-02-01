@@ -1,10 +1,24 @@
-// pages/accedi-socio.js — "Già socio? Accedi" — magic link, nessun login/sessione
-// Logica solo da router.query: success, source, returnUrl. Nessun cookie/localStorage.
+// pages/accedi-socio.js — "Già socio? Accedi" — magic link + member session cookie (httpOnly)
+// getServerSideProps legge cookie; se valido → isMemberVerified. Nessun Supabase Auth.
 
 import { useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
+import { COOKIE_NAME, verifyMemberSessionToken } from '../lib/memberSession'
+
+function getCookieValue(cookieHeader, name) {
+  if (!cookieHeader || typeof cookieHeader !== 'string') return null
+  const match = cookieHeader.match(new RegExp(`(?:^|;)\\s*${name}=([^;]*)`))
+  return match ? decodeURIComponent(match[1].trim()) : null
+}
+
+export async function getServerSideProps(context) {
+  const cookieHeader = context.req?.headers?.cookie ?? null
+  const token = getCookieValue(cookieHeader, COOKIE_NAME)
+  const isMemberVerified = token ? !!verifyMemberSessionToken(token) : false
+  return { props: { isMemberVerified } }
+}
 
 function isEnotempoReturnUrl(url) {
   if (typeof url !== 'string' || !url.startsWith('https://')) return false
@@ -12,9 +26,9 @@ function isEnotempoReturnUrl(url) {
   return u.includes('enotempo.it') || u.includes('enotempo.com')
 }
 
-export default function AccediSocio() {
+export default function AccediSocio({ isMemberVerified }) {
   const router = useRouter()
-  const { returnUrl, source, success, error } = router.query
+  const { returnUrl, source, success, error, loggedOut } = router.query
 
   const isSuccess = router.query.success === '1'
   const sourceNorm = (source || 'fenam').toString().toLowerCase().trim()
@@ -34,6 +48,45 @@ export default function AccediSocio() {
   const enotempoHref = sourceNorm === 'enotempo' && returnUrlStr && isEnotempoReturnUrl(returnUrlStr)
     ? returnUrlStr
     : 'https://enotempo.it'
+
+  // Già verificato via cookie: mostra solo box informativo, no form
+  if (isMemberVerified) {
+    return (
+      <>
+        <Head>
+          <title>Accedi come socio | FENAM</title>
+          <meta name="description" content="Sei già verificato come socio FENAM su questo dispositivo." />
+        </Head>
+        <div className="bg-paper min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-md">
+            <div className="rounded-3xl bg-[#8fd1d2] p-8 text-secondary shadow-lg">
+              <h1 className="text-2xl font-bold mb-4">Già socio? Accedi</h1>
+              <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-800 text-sm mb-6">
+                Sei già verificato come socio su questo dispositivo.
+              </div>
+              <p className="text-sm text-secondary/90 mb-6">
+                Puoi continuare la navigazione su FENAM o andare alla pagina Affiliazione.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link
+                  href="/affiliazione"
+                  className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                >
+                  Vai ad Affiliazione
+                </Link>
+                <Link
+                  href="/"
+                  className="inline-flex items-center justify-center rounded-full border-2 border-primary bg-white px-5 py-2.5 text-sm font-semibold text-primary hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                >
+                  Home
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -127,6 +180,12 @@ export default function AccediSocio() {
             <p className="text-sm text-secondary/90 mb-6">
               Se sei già affiliato a FENAM, inserisci l’email con cui ti sei iscritto. Ti invieremo un link per accedere (valido pochi minuti).
             </p>
+
+            {loggedOutMessage && (
+              <div className="mb-6 rounded-lg bg-green-50 border border-green-200 p-4 text-green-800 text-sm">
+                Sessione socio chiusa.
+              </div>
+            )}
 
             {errorFromQuery && (
               <div className="mb-6 rounded-lg bg-red-50 border border-red-200 p-4 text-red-800 text-sm">
