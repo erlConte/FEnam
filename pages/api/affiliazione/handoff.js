@@ -33,26 +33,49 @@ export default async function handler(req, res) {
     const { orderID, returnUrl, source } = parseResult.data
     orderIDForLog = orderID
 
-    // Verifica che l'affiliazione esista e sia completata
+    // Verifica che l'affiliazione esista e sia completata + valida (non scaduta)
     const affiliation = await prisma.affiliation.findUnique({
       where: { orderId: orderID },
       select: {
         id: true,
         memberNumber: true,
         status: true,
+        memberUntil: true,
       },
     })
 
     if (!affiliation) {
-      return res.status(404).json({
-        error: 'Affiliazione non trovata',
-      })
+      return res.status(404).json({ error: 'Affiliazione non trovata' })
     }
 
     if (affiliation.status !== 'completed') {
       return res.status(400).json({
         error: 'Affiliazione non completata',
-        details: 'L\'affiliazione deve essere completata per generare il token di handoff',
+        details: "L'affiliazione deve essere completata per generare il token di handoff",
+      })
+    }
+
+    // ✅ Check validità tessera: memberUntil presente e nel futuro
+    if (!affiliation.memberUntil) {
+      return res.status(403).json({
+        error: 'Affiliazione non valida',
+        details: 'La tessera non risulta attiva (manca la data di scadenza).',
+      })
+    }
+
+    const untilDate = new Date(affiliation.memberUntil)
+    if (Number.isNaN(untilDate.getTime())) {
+      return res.status(500).json({
+        error: 'Affiliazione non valida',
+        details: 'Formato data scadenza non valido.',
+      })
+    }
+
+    const nowDate = new Date()
+    if (untilDate <= nowDate) {
+      return res.status(403).json({
+        error: 'Affiliazione scaduta',
+        details: 'La tessera è scaduta: rinnova per proseguire.',
       })
     }
 
@@ -91,10 +114,9 @@ export default async function handler(req, res) {
       redirectUrl: redirectUrl.toString(),
     })
   } catch (error) {
-    // Log solo eventId/affiliationId, non dati sensibili
     console.error('❌ [Handoff] Errore generazione token:', {
       orderID: orderIDForLog ? 'presente' : 'mancante',
-      error: error.message,
+      error: error?.message || 'unknown',
     })
     return res.status(500).json({
       error: 'Errore generazione token handoff',

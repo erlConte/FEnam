@@ -113,7 +113,15 @@ export default function AffiliazioneForm() {
           body: JSON.stringify(payloadWithDonazione),
         })
         const json = await res.json()
-        if (!res.ok) throw new Error(json.error || 'Errore ordine')
+        if (!res.ok) {
+          if (res.status === 409) {
+            toast.warning(json.message || 'Sei già socio attivo. Usa "Accedi come socio" per accedere senza ripagare.')
+            if (json.details?.accediSocioUrl) {
+              setTimeout(() => { window.location.href = json.details.accediSocioUrl }, 1500)
+            }
+          }
+          throw new Error(json.message || json.error || 'Errore ordine')
+        }
         return json.orderID
       },
 

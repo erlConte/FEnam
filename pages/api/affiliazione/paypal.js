@@ -97,6 +97,23 @@ export default async function handler(req, res) {
   const totalFormatted = total.toFixed(2) // string "xx.xx"
   const currency = 'EUR'
 
+  // Anti-doppio pagamento: se esiste già socio attivo con questa email, non creare ordine
+  const now = new Date()
+  const existingActive = await prisma.affiliation.findFirst({
+    where: {
+      email,
+      status: 'completed',
+      memberUntil: { gt: now },
+    },
+    select: { id: true },
+  })
+  if (existingActive) {
+    const baseUrl = process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'
+    return sendError(res, 409, 'Already active member', 'Risulti già socio attivo con questa email. Usa "Accedi come socio" per accedere senza ripagare.', {
+      accediSocioUrl: `${baseUrl}/accedi-socio`,
+    })
+  }
+
   // Correlation ID per tracciabilità (stesso stile di capture)
   const correlationId = getCorrelationId(req)
 
