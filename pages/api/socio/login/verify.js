@@ -21,8 +21,16 @@ export default async function handler(req, res) {
   }
 
   const token = typeof req.query.token === 'string' ? req.query.token.trim() : ''
-  const returnUrl = typeof req.query.returnUrl === 'string' ? req.query.returnUrl : null
+  let returnUrl = typeof req.query.returnUrl === 'string' ? req.query.returnUrl : null
   const source = typeof req.query.source === 'string' ? req.query.source : null
+
+  if (returnUrl) {
+    try {
+      returnUrl = decodeURIComponent(returnUrl)
+    } catch {
+      returnUrl = req.query.returnUrl
+    }
+  }
 
   if (!token) {
     return res.redirect(302, '/accedi-socio?error=missing_token')
@@ -60,7 +68,7 @@ export default async function handler(req, res) {
 
   const safeReturnUrl = getSafeReturnUrl(returnUrl)
   if (!safeReturnUrl) {
-    return res.redirect(302, '/accedi-socio?error=invalid_return&message=url_non_valido')
+    return res.redirect(302, '/accedi-socio?error=invalid_return')
   }
 
   const now = Math.floor(Date.now() / 1000)

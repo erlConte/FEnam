@@ -11,11 +11,7 @@ import { createPayPalClient, getPayPalBaseUrl, isPayPalLive } from '../../../lib
 // Inizializza PayPal client opzionalmente (non blocca startup se manca)
 const { client } = createPayPalClient()
 
-// Flusso esplicito: 1) valida input 2) crea ordine PayPal (intent CAPTURE) 3) crea record Affiliation pending 4) ritorna orderID
-// TODO P0: Verificare che NEXT_PUBLIC_PAYPAL_CLIENT_ID === PAYPAL_CLIENT_ID (stesso ambiente sandbox/live).
-// TODO P1: PAYPAL_ENV sbagliato (es. production in preview) forza modalità errata; controllare in Vercel.
-// TODO P1: Se il conto PayPal non accetta currency/amount (es. EUR o importo), l'ordine fallirà; messaggio da PayPal in log.
-// TODO P1: "Donazione" è concettuale: l'ordine è un pagamento normale PayPal; ricevuta/descrizione da allineare a branding.
+// Flusso: valida input → crea ordine PayPal (CAPTURE) → crea Affiliation pending → ritorna orderID
 
 // Schema di validazione Zod
 const affiliationSchema = z.object({

@@ -57,11 +57,18 @@ export default async function handler(req, res) {
     return sendError(res, 400, first.message || 'Validazione fallita', null, parseResult.error.errors)
   }
 
-  const { email, returnUrl, source } = parseResult.data
+  const { email, returnUrl: rawReturnUrl, source } = parseResult.data
+
+  // Valida returnUrl prima di generare token/email: solo URL valide (HTTPS + allowlist)
+  let safeReturnUrl = null
+  if (rawReturnUrl != null && String(rawReturnUrl).trim() !== '') {
+    safeReturnUrl = getSafeReturnUrl(String(rawReturnUrl).trim())
+    if (!safeReturnUrl) {
+      return sendError(res, 400, 'URL di ritorno non valido', 'L’URL di ritorno deve essere HTTPS e il dominio deve essere tra quelli consentiti. Verifica il link o contatta il supporto.')
+    }
+  }
 
   const now = new Date()
-  const memberUntilMin = new Date(now)
-  memberUntilMin.setMinutes(memberUntilMin.getMinutes() - 1)
 
   // Cerca socio attivo: status completed, memberUntil > now
   const affiliation = await prisma.affiliation.findFirst({
@@ -117,7 +124,9 @@ export default async function handler(req, res) {
   const verifyPath = '/api/socio/login/verify'
   const verifyUrl = new URL(verifyPath, BASE_URL)
   verifyUrl.searchParams.set('token', rawToken)
-  if (returnUrl) verifyUrl.searchParams.set('returnUrl', returnUrl)
+  if (safeReturnUrl) {
+    verifyUrl.searchParams.set('returnUrl', safeReturnUrl)
+  }
   if (source) verifyUrl.searchParams.set('source', source)
 
   if (RESEND_API_KEY && SENDER_EMAIL) {

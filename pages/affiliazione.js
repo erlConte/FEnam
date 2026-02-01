@@ -28,19 +28,33 @@ export default function Affiliazione() {
       {/* HERO */}
       <section className="bg-paper pb-24 pt-10">
         <div className="mx-auto grid max-w-7xl gap-14 px-6 lg:grid-cols-[minmax(320px,420px)_1fr]">
-          <div>
-            {/* CTA "Già socio?" — visibile sempre; in evidenza se arrivo da Enotempo */}
-            <div className={`mb-6 rounded-2xl p-4 ${fromEnotempo ? 'bg-[#8fd1d2] border-2 border-primary' : 'bg-secondary/5 border border-secondary/20'}`}>
-              <p className="text-sm font-medium text-secondary mb-2">
-                Sei già socio?
+          <div className="flex flex-col gap-6">
+            {/* CTA "Già socio?" — premium, sopra il form; in evidenza se da Enotempo */}
+            <div
+              className={`rounded-2xl border shadow-md transition-colors p-4 sm:p-5 ${
+                fromEnotempo
+                  ? 'border-primary/40 bg-[#e8f5f5]'
+                  : 'border-secondary/15 bg-white'
+              }`}
+              role="region"
+              aria-label="Accesso socio già affiliato"
+            >
+              <p className="text-sm font-semibold text-secondary mb-1">
+                {fromEnotempo ? 'Hai già pagato la tessera? Non ripagare.' : 'Sei già socio?'}
+              </p>
+              <p className="text-xs text-secondary/80 mb-4">
+                {fromEnotempo
+                  ? 'Accedi con la tua email per tornare su Enotempo senza rifare il pagamento.'
+                  : 'Inserisci la tua email e riceverai un link per accedere.'}
               </p>
               <Link
                 href={accediSocioHref}
-                className="inline-block rounded-full bg-secondary/10 px-4 py-2 text-sm font-semibold text-secondary hover:bg-secondary/20"
+                className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
               >
-                Accedi qui (senza ripagare)
+                Accedi come socio
               </Link>
             </div>
+
             <AffiliazioneForm />
           </div>
           <div className="space-y-6 self-center">
