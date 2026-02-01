@@ -1,6 +1,6 @@
 # FENAM - Federazione Nazionale Associazioni Multiculturali
 
-Sito vetrina + sistema di affiliazione tramite donazione PayPal. **Dominio canonico**: https://fenam.website (senza www; da www redirect 308 → non-www).
+Sito vetrina + sistema di affiliazione tramite donazione PayPal. **Dominio canonico**: https://fenam.website (senza www). Redirect www → apex gestito da Vercel Domains, non in app.
 
 ## Stack Tecnologico
 
