@@ -9,10 +9,42 @@ export default function Affiliazione() {
   const { return: returnParam, source } = router.query
   const returnUrl = typeof returnParam === 'string' ? returnParam : ''
   const fromEnotempo = source === 'enotempo'
+  const isAlreadySocio = router.query.success === '1'
 
   const accediSocioHref = fromEnotempo && returnUrl
     ? `/accedi-socio?source=enotempo&returnUrl=${encodeURIComponent(returnUrl)}`
     : '/accedi-socio?source=fenam'
+
+  if (isAlreadySocio) {
+    return (
+      <>
+        <Head><title>Affiliazione | FENAM</title></Head>
+        <div className="bg-paper">
+          <div className="mx-auto max-w-7xl px-6 pt-6">
+            <p className="bullet-title text-secondary">Affiliazione</p>
+          </div>
+        </div>
+        <section className="bg-paper py-16 px-4 sm:px-6">
+          <div className="mx-auto max-w-xl">
+            <div className="rounded-2xl border border-primary/30 bg-[#e8f5f5] p-6 sm:p-8 shadow-md">
+              <p className="text-lg font-semibold text-secondary mb-2">
+                Risulti già socio FENAM. Non è necessario effettuare una nuova affiliazione.
+              </p>
+              <p className="text-sm text-secondary/80 mb-6">
+                Puoi continuare la navigazione sul sito o accedere come socio se provieni da un servizio partner.
+              </p>
+              <Link
+                href="/"
+                className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              >
+                Torna alla home
+              </Link>
+            </div>
+          </div>
+        </section>
+      </>
+    )
+  }
 
   return (
     <>
