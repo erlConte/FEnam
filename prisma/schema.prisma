@@ -47,4 +47,18 @@ model Affiliation {
   lastPaypalStatus       String?   // Debug: ultimo status PayPal (es. PENDING, COMPLETED)
   lastPaypalCheckedAt    DateTime? // Debug: ultima verifica capture
   createdAt              DateTime  @default(now())
+  loginTokens            MemberLoginToken[]
+}
+
+/// Token monouso per accesso socio (magic link). Solo hash salvato in DB.
+model MemberLoginToken {
+  id            String    @id @default(cuid())
+  tokenHash     String    @unique  // SHA256 del token in chiaro
+  affiliationId String
+  affiliation   Affiliation @relation(fields: [affiliationId], references: [id], onDelete: Cascade)
+  expiresAt     DateTime
+  usedAt        DateTime?  // null = non ancora usato
+  createdAt     DateTime   @default(now())
+  requestIp     String?
+  userAgent     String?
 }

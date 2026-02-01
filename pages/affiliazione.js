@@ -1,8 +1,19 @@
 // pages/affiliazione.js
 import Head from 'next/head'
+import Link from 'next/link'
+import { useRouter } from 'next/router'
 import AffiliazioneForm from '../components/AffiliazioneForm'
 
 export default function Affiliazione() {
+  const router = useRouter()
+  const { return: returnParam, source } = router.query
+  const returnUrl = typeof returnParam === 'string' ? returnParam : ''
+  const fromEnotempo = source === 'enotempo'
+
+  const accediSocioHref = returnUrl
+    ? `/accedi-socio?returnUrl=${encodeURIComponent(returnUrl)}&source=enotempo`
+    : '/accedi-socio?source=enotempo'
+
   return (
     <>
       <Head><title>Affiliazione | FENAM</title></Head>
@@ -17,7 +28,21 @@ export default function Affiliazione() {
       {/* HERO */}
       <section className="bg-paper pb-24 pt-10">
         <div className="mx-auto grid max-w-7xl gap-14 px-6 lg:grid-cols-[minmax(320px,420px)_1fr]">
-          <AffiliazioneForm />
+          <div>
+            {/* CTA "Già socio?" — visibile sempre; in evidenza se arrivo da Enotempo */}
+            <div className={`mb-6 rounded-2xl p-4 ${fromEnotempo ? 'bg-[#8fd1d2] border-2 border-primary' : 'bg-secondary/5 border border-secondary/20'}`}>
+              <p className="text-sm font-medium text-secondary mb-2">
+                Sei già socio?
+              </p>
+              <Link
+                href={accediSocioHref}
+                className="inline-block rounded-full bg-secondary/10 px-4 py-2 text-sm font-semibold text-secondary hover:bg-secondary/20"
+              >
+                Accedi qui (senza ripagare)
+              </Link>
+            </div>
+            <AffiliazioneForm />
+          </div>
           <div className="space-y-6 self-center">
             <h1 className="text-4xl font-bold leading-snug text-secondary">
               Un Mondo di Opportunità Ti Aspetta:<br />

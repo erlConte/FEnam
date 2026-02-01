@@ -86,21 +86,9 @@ export default async function handler(req, res) {
 
   const { nome, cognome, email, telefono, privacy, donazione } = parseResult.data
 
-  // Donazione 0: non passare da PayPal, usare /api/affiliazione/free
-  if (donazione === 0) {
-    return sendError(res, 400, 'Invalid donation', 'Donazione 0: usa /api/affiliazione/free', [
-      { path: ['donazione'], message: 'Donazione 0: usa /api/affiliazione/free' }
-    ])
-  }
-
-  // Calcolo importo (solo donazione)
+  // Calcolo importo (donazione minima 10€)
   const total = Math.round(donazione * 100) / 100
 
-  if (total <= 0) {
-    return sendError(res, 400, 'Invalid amount', 'Donazione 0: usa /api/affiliazione/free', [
-      { path: ['donazione'], message: 'Donazione 0: usa /api/affiliazione/free' }
-    ])
-  }
   if (total < 10) {
     return sendError(res, 400, 'Invalid amount', 'Importo minimo 10€', [
       { path: ['donazione'], message: 'Importo minimo 10€' }
@@ -116,6 +104,25 @@ export default async function handler(req, res) {
   const currency = 'EUR'
   const intent = 'CAPTURE'
 
+
+  // Anti-doppio pagamento: se esiste già socio attivo con questa email, non creare ordine
+  const now = new Date()
+  const existingActive = await prisma.affiliation.findFirst({
+    where: {
+      email,
+      status: 'completed',
+      memberUntil: { gt: now },
+    },
+    select: { id: true },
+  })
+  if (existingActive) {
+    const baseUrl = process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'https://fenam.website'
+    return sendError(res, 409, 'Already active member', 'Risulti già socio attivo con questa email. Usa "Accedi come socio" per accedere senza ripagare.', {
+      accediSocioUrl: `${baseUrl}/accedi-socio`,
+    })
+  }
+
+  // Correlation ID per tracciabilità (stesso stile di capture)
   const correlationId = getCorrelationId(req)
   const paypalBaseUrl = getPayPalBaseUrl()
   const paypalMode = isPayPalLive() ? 'live' : 'sandbox'
