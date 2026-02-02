@@ -113,14 +113,18 @@ export default function AccediSocio({ isMemberVerified }) {
     setLoading(true)
     setErrorMsg(null)
     try {
+      // POST deve includere sempre source e returnUrl quando presenti in query (per verify → ENOTEMPO)
+      const body = {
+        email: email.trim().toLowerCase(),
+        source,
+      }
+      if (returnUrlStr != null && returnUrlStr !== '') {
+        body.returnUrl = returnUrlStr
+      }
       const res = await fetch('/api/socio/login/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          source,
-          returnUrl: returnUrlStr ?? undefined,
-        }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (res.ok) {

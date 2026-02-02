@@ -57,21 +57,22 @@ export default async function handler(req, res) {
     return sendError(res, 400, first.message || 'Validazione fallita', null, parseResult.error.errors)
   }
 
-  const { email, returnUrl: rawReturnUrl, source: rawSource } = parseResult.data
-  const src = (rawSource != null && String(rawSource).trim() !== '')
-    ? String(rawSource).trim().toLowerCase()
-    : 'fenam'
-  const source = src === 'enotempo' ? 'enotempo' : 'fenam'
+  // Leggi body.source esplicitamente (Zod + fallback da req.body per robustezza)
+  const bodySourceRaw = parseResult.data.source ?? (req.body && typeof req.body.source !== 'undefined' ? req.body.source : null)
+  const bodySource = bodySourceRaw != null ? String(bodySourceRaw).trim().toLowerCase() : ''
+  const src = bodySource === 'enotempo' ? 'enotempo' : 'fenam'
+
+  const { email, returnUrl: rawReturnUrl } = parseResult.data
 
   const allowedHosts = process.env.FENAM_ALLOWED_RETURN_HOSTS || 'enotempo.it,www.enotempo.it'
   let validatedReturnUrl = null
   if (rawReturnUrl != null && String(rawReturnUrl).trim() !== '') {
     const result = validateReturnUrl(String(rawReturnUrl).trim(), allowedHosts)
     if (result.ok) validatedReturnUrl = result.returnUrl
-    if (source === 'enotempo' && !validatedReturnUrl) {
+    if (src === 'enotempo' && !validatedReturnUrl) {
       return sendError(res, 400, 'URL di ritorno non valido', 'Per tornare su Enotempo è necessario un URL di ritorno valido (HTTPS e dominio consentito). Verifica il link o contatta il supporto.')
     }
-  } else if (source === 'enotempo') {
+  } else if (src === 'enotempo') {
     return sendError(res, 400, 'URL di ritorno mancante', 'Per tornare su Enotempo è necessario fornire l’URL di ritorno.')
   }
 
@@ -123,8 +124,8 @@ export default async function handler(req, res) {
       tokenHash,
       affiliationId: affiliation.id,
       expiresAt,
-      source,
-      returnUrl: validatedReturnUrl,
+      source: src,
+      returnUrl: src === 'enotempo' ? validatedReturnUrl : null,
       requestIp,
       userAgent,
     },
@@ -135,7 +136,7 @@ export default async function handler(req, res) {
   verifyUrl.searchParams.set('token', rawToken)
 
   if (process.env.NODE_ENV !== 'test') {
-    logger.info('[Socio Login Request]', { src: source, hasReturnUrl: !!validatedReturnUrl, tokenCreated: true })
+    logger.info('[Socio Login Request]', { src, hasReturnUrl: src === 'enotempo' ? !!validatedReturnUrl : false, tokenCreated: true })
   }
 
   if (RESEND_API_KEY && SENDER_EMAIL) {
