@@ -98,10 +98,9 @@ export default async function handler(req, res) {
         exp,
       }
       const handoffToken = createHandoffToken(payload)
-      const redirectUrl = new URL(returnUrlFromDb)
-      redirectUrl.searchParams.set('status', 'success')
-      redirectUrl.searchParams.set('token', handoffToken)
-      return res.redirect(302, redirectUrl.toString())
+      const url = new URL(returnUrlFromDb)
+      url.searchParams.set('fenamToken', handoffToken)
+      return res.redirect(302, url.toString())
     }
     if (!memberActive) {
       return res.redirect(302, '/affiliazione?expired=1')
