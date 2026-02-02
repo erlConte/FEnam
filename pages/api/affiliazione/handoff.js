@@ -1,10 +1,23 @@
 // pages/api/affiliazione/handoff.js
-// API per generare token handoff e ritornare URL di redirect
+// GET ?redirect=... — già socio: sessione da cookie, 302 verso redirect con fenamToken.
+// POST body { orderID, returnUrl?, source? } — post-pagamento: ritorna JSON con redirectUrl (fenamToken in query).
 
 import { createHandoffToken } from '../../../lib/handoffToken'
 import { getSafeReturnUrl } from '../../../lib/validateReturnUrl'
 import { prisma } from '../../../lib/prisma'
+import { COOKIE_NAME, verifyMemberSessionToken } from '../../../lib/memberSession'
 import { z } from 'zod'
+
+function getCookieValue(cookieHeader, name) {
+  if (!cookieHeader || typeof cookieHeader !== 'string') return null
+  const match = cookieHeader.match(new RegExp(`(?:^|;)\\s*${name}=([^;]*)`))
+  if (!match) return null
+  try {
+    return decodeURIComponent(match[1].trim())
+  } catch {
+    return match[1].trim()
+  }
+}
 
 const handoffSchema = z.object({
   orderID: z.string().min(1, 'OrderID obbligatorio'),
@@ -12,8 +25,55 @@ const handoffSchema = z.object({
   source: z.string().nullable().optional(),
 })
 
+async function handleGet(req, res) {
+  if (!process.env.FENAM_HANDOFF_SECRET || process.env.FENAM_HANDOFF_SECRET.trim() === '') {
+    return res.status(503).send('Service unavailable')
+  }
+  const redirectRaw = typeof req.query.redirect === 'string' ? req.query.redirect.trim() : ''
+  if (!redirectRaw) {
+    return res.redirect(302, '/affiliazione')
+  }
+  const safeRedirect = getSafeReturnUrl(redirectRaw)
+  if (!safeRedirect) {
+    return res.redirect(302, '/affiliazione')
+  }
+  const cookieHeader = req.headers.cookie ?? null
+  const sessionToken = getCookieValue(cookieHeader, COOKIE_NAME)
+  const session = sessionToken ? verifyMemberSessionToken(sessionToken) : null
+  if (!session?.affiliationId) {
+    return res.redirect(302, '/accedi-socio?source=enotempo&returnUrl=' + encodeURIComponent(redirectRaw))
+  }
+  const affiliation = await prisma.affiliation.findUnique({
+    where: { id: session.affiliationId },
+    select: { id: true, memberNumber: true, status: true, memberUntil: true },
+  })
+  if (!affiliation || affiliation.status !== 'completed' || !affiliation.memberUntil) {
+    return res.redirect(302, '/affiliazione')
+  }
+  const untilDate = new Date(affiliation.memberUntil)
+  if (Number.isNaN(untilDate.getTime()) || untilDate <= new Date()) {
+    return res.redirect(302, '/affiliazione')
+  }
+  const now = Math.floor(Date.now() / 1000)
+  const exp = now + 600
+  const payload = {
+    sub: affiliation.memberNumber || affiliation.id,
+    src: 'enotempo',
+    iat: now,
+    exp,
+  }
+  const handoffToken = createHandoffToken(payload)
+  const u = new URL(safeRedirect)
+  u.searchParams.set('fenamToken', handoffToken)
+  return res.redirect(302, u.toString())
+}
+
 export default async function handler(req, res) {
+  if (req.method === 'GET') {
+    return handleGet(req, res)
+  }
   if (req.method !== 'POST') {
+    res.setHeader('Allow', 'GET, POST')
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
@@ -109,22 +169,19 @@ export default async function handler(req, res) {
       exp: exp,
     }
 
-    const token = createHandoffToken(payload)
-
-    // Costruisci URL di redirect con token
-    const redirectUrl = new URL(safeReturnUrl)
-    redirectUrl.searchParams.set('status', 'success')
-    redirectUrl.searchParams.set('token', token)
+    const handoffToken = createHandoffToken(payload)
+    const u = new URL(safeReturnUrl)
+    u.searchParams.set('status', 'success')
+    u.searchParams.set('fenamToken', handoffToken)
 
     return res.status(200).json({
       ok: true,
-      redirectUrl: redirectUrl.toString(),
+      redirectUrl: u.toString(),
     })
   } catch (error) {
-    console.error('❌ [Handoff] Errore generazione token:', {
-      orderID: orderIDForLog ? 'presente' : 'mancante',
-      error: error?.message || 'unknown',
-    })
+    if (process.env.NODE_ENV !== 'test') {
+      console.error('[Handoff] Errore', { hasOrderID: !!orderIDForLog, err: error?.message || 'unknown' })
+    }
     return res.status(500).json({
       error: 'Errore generazione token handoff',
     })
