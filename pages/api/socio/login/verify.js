@@ -7,6 +7,7 @@ import crypto from 'crypto'
 import { prisma } from '../../../../lib/prisma'
 import { createHandoffToken } from '../../../../lib/handoffToken'
 import { getSafeReturnUrl } from '../../../../lib/validateReturnUrl'
+import { safeDecodeOnce } from '../../../../lib/safeDecode'
 import {
   COOKIE_NAME,
   createMemberSessionToken,
@@ -35,11 +36,7 @@ export default async function handler(req, res) {
   const source = typeof req.query.source === 'string' ? req.query.source : null
 
   if (returnUrl) {
-    try {
-      returnUrl = decodeURIComponent(returnUrl)
-    } catch {
-      returnUrl = req.query.returnUrl
-    }
+    returnUrl = safeDecodeOnce(returnUrl)
   }
 
   const src = (source || 'fenam').toLowerCase().trim()

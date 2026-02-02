@@ -1,10 +1,31 @@
-import { useEffect, useRef, useState } from 'react'
+import { Component, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/router'
+import { getQueryString } from '../lib/safeDecode'
 import 'react-toastify/dist/ReactToastify.css'
+
+class PaypalBoxErrorBoundary extends Component {
+  state = { hasError: false }
+  static getDerivedStateFromError() { return { hasError: true } }
+  componentDidCatch(err, info) {
+    if (typeof console !== 'undefined' && console.error) {
+      console.error('[PayPal]', err?.message || err, info?.componentStack)
+    }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800 text-sm">
+          Errore caricamento PayPal. Ricarica la pagina o contatta il supporto.
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const schema = z.object({
   nome:     z.string().min(2, 'Obbligatorio'),
@@ -34,16 +55,14 @@ export default function AffiliazioneForm() {
   const paypalRef = useRef(null)
   const handoffParamsRef = useRef({ returnUrl: null, source: null })
   const router = useRouter()
-  
-  // Leggi e conserva query params per handoff (return e source) usando ref per stabilità
-  const { return: returnParam, source } = router.query
+  const returnParam = getQueryString(router.query, 'returnUrl') || getQueryString(router.query, 'return')
+  const source = getQueryString(router.query, 'source')
 
-  // Aggiorna handoff params ref quando router.query cambia (solo quando router è ready)
   useEffect(() => {
     if (router.isReady) {
       handoffParamsRef.current = {
-        returnUrl: typeof returnParam === 'string' ? returnParam : null,
-        source: typeof source === 'string' ? source : null,
+        returnUrl: returnParam || null,
+        source: source || null,
       }
     }
   }, [router.isReady, returnParam, source])
@@ -64,10 +83,11 @@ export default function AffiliazioneForm() {
   const donazioneValue = watch('donazione')
   const donazioneNum = Math.max(0, parseDonazione(donazioneValue))
 
-  /* carica SDK PayPal una sola volta */
+  /* carica SDK PayPal una sola volta (solo client) */
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
     if (window.paypal) return setSdkReady(true)
-    
+
     const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
     if (!clientId) {
       console.error('NEXT_PUBLIC_PAYPAL_CLIENT_ID is missing')
@@ -87,11 +107,9 @@ export default function AffiliazioneForm() {
 
   /* render bottone PayPal */
   useEffect(() => {
-    if (!sdkReady || !paypalRef.current) {
-      return
-    }
+    if (typeof window === 'undefined' || !window.paypal) return
+    if (!sdkReady || !paypalRef.current) return
 
-    // Pulisci contenuto prima di renderizzare nuovo bottone
     paypalRef.current.innerHTML = ''
 
     window.paypal.Buttons({
@@ -315,7 +333,9 @@ export default function AffiliazioneForm() {
 
       {/* CTA: solo PayPal se donazione >= 10; altrimenti nessuna CTA */}
       {donazioneNum >= 10 ? (
-        <div ref={paypalRef} className="w-full" />
+        <PaypalBoxErrorBoundary>
+          <div ref={paypalRef} className="w-full" />
+        </PaypalBoxErrorBoundary>
       ) : null}
     </form>
   )

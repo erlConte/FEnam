@@ -1,13 +1,15 @@
 // pages/affiliazione.js
+import { useEffect } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import AffiliazioneForm from '../components/AffiliazioneForm'
+import { safeDecodeOnce, getQueryString } from '../lib/safeDecode'
 
 function getCookieValue(cookieHeader, name) {
   if (!cookieHeader || typeof cookieHeader !== 'string') return null
   const match = cookieHeader.match(new RegExp(`(?:^|;)\\s*${name}=([^;]*)`))
-  return match ? decodeURIComponent(match[1].trim()) : null
+  return match ? safeDecodeOnce(match[1].trim()) : null
 }
 
 export async function getServerSideProps(context) {
@@ -20,13 +22,26 @@ export async function getServerSideProps(context) {
 
 export default function Affiliazione({ isMemberVerified }) {
   const router = useRouter()
-  const { return: returnParam, source } = router.query
-  const returnUrl = typeof returnParam === 'string' ? returnParam : ''
-  const fromEnotempo = source === 'enotempo'
+  const returnUrl = getQueryString(router.query, 'returnUrl') || getQueryString(router.query, 'return')
+  const sourceNorm = getQueryString(router.query, 'source')
+  const fromEnotempo = sourceNorm === 'enotempo'
 
-  const accediSocioHref = fromEnotempo && returnUrl
-    ? `/accedi-socio?source=enotempo&returnUrl=${encodeURIComponent(returnUrl)}`
-    : '/accedi-socio?source=fenam'
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined' && router.isReady) {
+      console.info('[affiliazione]', { pathname: router.pathname, queryKeys: Object.keys(router.query || {}) })
+    }
+  }, [router.pathname, router.query, router.isReady])
+
+  let accediSocioHref = '/accedi-socio?source=fenam'
+  if (fromEnotempo && returnUrl) {
+    try {
+      accediSocioHref = `/accedi-socio?source=enotempo&returnUrl=${encodeURIComponent(returnUrl)}`
+    } catch {
+      accediSocioHref = '/accedi-socio?source=enotempo'
+    }
+  } else if (fromEnotempo) {
+    accediSocioHref = '/accedi-socio?source=enotempo'
+  }
 
   if (isMemberVerified) {
     return (

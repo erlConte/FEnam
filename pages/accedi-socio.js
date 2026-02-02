@@ -1,15 +1,16 @@
 // pages/accedi-socio.js — "Già socio? Accedi" — magic link + member session cookie (httpOnly)
 // getServerSideProps legge cookie; se valido → isMemberVerified. Nessun Supabase Auth.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
+import { safeDecodeOnce, getQueryString } from '../lib/safeDecode'
 
 function getCookieValue(cookieHeader, name) {
   if (!cookieHeader || typeof cookieHeader !== 'string') return null
   const match = cookieHeader.match(new RegExp(`(?:^|;)\\s*${name}=([^;]*)`))
-  return match ? decodeURIComponent(match[1].trim()) : null
+  return match ? safeDecodeOnce(match[1].trim()) : null
 }
 
 export async function getServerSideProps(context) {
@@ -28,16 +29,25 @@ function isEnotempoReturnUrl(url) {
 
 export default function AccediSocio({ isMemberVerified }) {
   const router = useRouter()
-  const { returnUrl, source, success, error, loggedOut } = router.query
-
-  const isSuccess = router.query.success === '1'
-  const sourceNorm = (source || 'fenam').toString().toLowerCase().trim()
-  const returnUrlStr = returnUrl != null ? String(returnUrl).trim() : null
+  const returnUrlStr = (() => {
+    const s = getQueryString(router.query, 'returnUrl') || getQueryString(router.query, 'return')
+    return s ? s.trim() : null
+  })()
+  const sourceNorm = (getQueryString(router.query, 'source') || 'fenam').toLowerCase().trim()
+  const isSuccess = getQueryString(router.query, 'success') === '1'
+  const error = getQueryString(router.query, 'error')
+  const isLoggedOut = getQueryString(router.query, 'loggedOut') === '1'
 
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
   const [errorMsg, setErrorMsg] = useState(null)
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined' && router.isReady) {
+      console.info('[accedi-socio]', { pathname: router.pathname, queryKeys: Object.keys(router.query || {}) })
+    }
+  }, [router.pathname, router.query, router.isReady])
 
   const errorFromQuery = error === 'missing_token' && 'Link non valido.'
     || error === 'invalid_or_used' && 'Link scaduto o già usato. Richiedi un nuovo link.'
@@ -181,7 +191,7 @@ export default function AccediSocio({ isMemberVerified }) {
               Se sei già affiliato a FENAM, inserisci l’email con cui ti sei iscritto. Ti invieremo un link per accedere (valido pochi minuti).
             </p>
 
-            {loggedOutMessage && (
+            {isLoggedOut && (
               <div className="mb-6 rounded-lg bg-green-50 border border-green-200 p-4 text-green-800 text-sm">
                 Sessione socio chiusa.
               </div>
