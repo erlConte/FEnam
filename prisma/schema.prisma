@@ -50,7 +50,7 @@ model Affiliation {
   loginTokens            MemberLoginToken[]
 }
 
-/// Token monouso per accesso socio (magic link). Solo hash salvato in DB.
+/// Token monouso per accesso socio (magic link). Hash + source/returnUrl salvati in DB (no source/returnUrl nel link email).
 model MemberLoginToken {
   id            String    @id @default(cuid())
   tokenHash     String    @unique  // SHA256 del token in chiaro
@@ -58,6 +58,8 @@ model MemberLoginToken {
   affiliation   Affiliation @relation(fields: [affiliationId], references: [id], onDelete: Cascade)
   expiresAt     DateTime
   usedAt        DateTime?  // null = non ancora usato
+  source        String    @default("fenam")  // enotempo | fenam per redirect verify
+  returnUrl     String?   // URL validata allowlist, solo se source=enotempo o se presente
   createdAt     DateTime   @default(now())
   requestIp     String?
   userAgent     String?

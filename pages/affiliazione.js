@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import AffiliazioneForm from '../components/AffiliazioneForm'
 import { safeDecodeOnce, getQueryString } from '../lib/safeDecode'
+import { firstQueryValue, validateReturnUrl } from '../lib/returnUrl'
 
 function getCookieValue(cookieHeader, name) {
   if (!cookieHeader || typeof cookieHeader !== 'string') return null
@@ -17,14 +18,26 @@ export async function getServerSideProps(context) {
   const cookieHeader = context.req?.headers?.cookie ?? null
   const token = getCookieValue(cookieHeader, COOKIE_NAME)
   const isMemberVerified = token ? !!verifyMemberSessionToken(token) : false
-  return { props: { isMemberVerified } }
+
+  const returnUrlRaw = firstQueryValue(context.query.returnUrl) ?? firstQueryValue(context.query.return)
+  const sourceRaw = firstQueryValue(context.query.source)
+  const fromEnotempo = (sourceRaw && String(sourceRaw).toLowerCase().trim() === 'enotempo')
+  let validReturnUrl = null
+  if (returnUrlRaw && typeof returnUrlRaw === 'string' && returnUrlRaw.trim()) {
+    const allowedHosts = process.env.FENAM_ALLOWED_RETURN_HOSTS || 'enotempo.it,www.enotempo.it'
+    const result = validateReturnUrl(returnUrlRaw.trim(), allowedHosts)
+    if (result.ok && result.returnUrl) validReturnUrl = result.returnUrl
+  }
+
+  return { props: { isMemberVerified, fromEnotempo, validReturnUrl } }
 }
 
-export default function Affiliazione({ isMemberVerified }) {
+export default function Affiliazione({ isMemberVerified, fromEnotempo, validReturnUrl }) {
   const router = useRouter()
   const returnUrl = getQueryString(router.query, 'returnUrl') || getQueryString(router.query, 'return')
   const sourceNorm = getQueryString(router.query, 'source')
-  const fromEnotempo = sourceNorm === 'enotempo'
+  const fromEnotempoClient = sourceNorm === 'enotempo'
+  const fromEnotempoVal = fromEnotempo !== undefined ? fromEnotempo : fromEnotempoClient
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined' && router.isReady) {
@@ -33,13 +46,13 @@ export default function Affiliazione({ isMemberVerified }) {
   }, [router.pathname, router.query, router.isReady])
 
   let accediSocioHref = '/accedi-socio?source=fenam'
-  if (fromEnotempo && returnUrl) {
+  if (fromEnotempoVal && returnUrl) {
     try {
       accediSocioHref = `/accedi-socio?source=enotempo&returnUrl=${encodeURIComponent(returnUrl)}`
     } catch {
       accediSocioHref = '/accedi-socio?source=enotempo'
     }
-  } else if (fromEnotempo) {
+  } else if (fromEnotempoVal) {
     accediSocioHref = '/accedi-socio?source=enotempo'
   }
 
@@ -62,6 +75,14 @@ export default function Affiliazione({ isMemberVerified }) {
                 Puoi continuare la navigazione sul sito o accedere come socio se provieni da un servizio partner.
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
+                {fromEnotempoVal && validReturnUrl && (
+                  <a
+                    href={validReturnUrl}
+                    className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                  >
+                    Torna a Enotempo
+                  </a>
+                )}
                 <Link
                   href="/"
                   className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
@@ -100,7 +121,7 @@ export default function Affiliazione({ isMemberVerified }) {
             {/* CTA "Già socio?" — premium, sopra il form; in evidenza se da Enotempo */}
             <div
               className={`rounded-2xl border shadow-md transition-colors p-4 sm:p-5 ${
-                fromEnotempo
+                fromEnotempoVal
                   ? 'border-primary/40 bg-[#e8f5f5]'
                   : 'border-secondary/15 bg-white'
               }`}
@@ -108,10 +129,10 @@ export default function Affiliazione({ isMemberVerified }) {
               aria-label="Accesso socio già affiliato"
             >
               <p className="text-sm font-semibold text-secondary mb-1">
-                {fromEnotempo ? 'Hai già pagato la tessera? Non ripagare.' : 'Sei già socio?'}
+                {fromEnotempoVal ? 'Hai già pagato la tessera? Non ripagare.' : 'Sei già socio?'}
               </p>
               <p className="text-xs text-secondary/80 mb-4">
-                {fromEnotempo
+                {fromEnotempoVal
                   ? 'Accedi con la tua email per tornare su Enotempo senza rifare il pagamento.'
                   : 'Inserisci la tua email e riceverai un link per accedere.'}
               </p>

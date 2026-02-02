@@ -6,6 +6,7 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { safeDecodeOnce, getQueryString } from '../lib/safeDecode'
+import { firstQueryValue } from '../lib/returnUrl'
 
 function getCookieValue(cookieHeader, name) {
   if (!cookieHeader || typeof cookieHeader !== 'string') return null
@@ -29,11 +30,11 @@ function isEnotempoReturnUrl(url) {
 
 export default function AccediSocio({ isMemberVerified }) {
   const router = useRouter()
-  const returnUrlStr = (() => {
-    const s = getQueryString(router.query, 'returnUrl') || getQueryString(router.query, 'return')
-    return s ? s.trim() : null
-  })()
-  const sourceNorm = (getQueryString(router.query, 'source') || 'fenam').toLowerCase().trim()
+  const returnUrlRaw = firstQueryValue(router.query.returnUrl) ?? firstQueryValue(router.query.return)
+  const returnUrlStr = returnUrlRaw && typeof returnUrlRaw === 'string' ? returnUrlRaw.trim() || null : null
+  const sourceRaw = firstQueryValue(router.query.source)
+  const sourceNorm = (sourceRaw && typeof sourceRaw === 'string' ? sourceRaw : 'fenam').toLowerCase().trim()
+  const source = sourceNorm === 'enotempo' ? 'enotempo' : 'fenam'
   const isSuccess = getQueryString(router.query, 'success') === '1'
   const error = getQueryString(router.query, 'error')
   const isLoggedOut = getQueryString(router.query, 'loggedOut') === '1'
@@ -117,8 +118,8 @@ export default function AccediSocio({ isMemberVerified }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
-          returnUrl: returnUrlStr || undefined,
-          source: sourceNorm,
+          source,
+          returnUrl: returnUrlStr ?? undefined,
         }),
       })
       const data = await res.json()

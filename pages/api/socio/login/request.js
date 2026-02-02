@@ -1,14 +1,13 @@
 // POST /api/socio/login/request — Richiesta magic link per socio già affiliato (no Supabase Auth)
-// Body: { email, returnUrl?, source? }
-// Rate limit: 5/ora per IP. Max 5 token/ora per email (conteggio DB).
-// Salva solo hash del token in DB. Nessun PII nei log.
+// Body: { email, returnUrl?, source? }. source/returnUrl salvati in DB; link email contiene SOLO token.
+// Rate limit: 5/ora per IP. Max 5 token/ora per email. Nessun PII nei log.
 
 import crypto from 'crypto'
 import { z } from 'zod'
 import { prisma } from '../../../../lib/prisma'
 import { rateLimit } from '../../../../lib/rateLimit'
 import { checkMethod, sendError, sendSuccess } from '../../../../lib/apiHelpers'
-import { getSafeReturnUrl } from '../../../../lib/validateReturnUrl'
+import { validateReturnUrl } from '../../../../lib/returnUrl'
 import { logger } from '../../../../lib/logger'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
@@ -59,15 +58,17 @@ export default async function handler(req, res) {
   }
 
   const { email, returnUrl: rawReturnUrl, source: rawSource } = parseResult.data
-  const source = (rawSource != null && String(rawSource).trim() !== '')
+  const src = (rawSource != null && String(rawSource).trim() !== '')
     ? String(rawSource).trim().toLowerCase()
     : 'fenam'
+  const source = src === 'enotempo' ? 'enotempo' : 'fenam'
 
-  // Se source=enotempo richiedi returnUrl valida; altrimenti returnUrl opzionale
-  let safeReturnUrl = null
+  const allowedHosts = process.env.FENAM_ALLOWED_RETURN_HOSTS || 'enotempo.it,www.enotempo.it'
+  let validatedReturnUrl = null
   if (rawReturnUrl != null && String(rawReturnUrl).trim() !== '') {
-    safeReturnUrl = getSafeReturnUrl(String(rawReturnUrl).trim())
-    if (source === 'enotempo' && !safeReturnUrl) {
+    const result = validateReturnUrl(String(rawReturnUrl).trim(), allowedHosts)
+    if (result.ok) validatedReturnUrl = result.returnUrl
+    if (source === 'enotempo' && !validatedReturnUrl) {
       return sendError(res, 400, 'URL di ritorno non valido', 'Per tornare su Enotempo è necessario un URL di ritorno valido (HTTPS e dominio consentito). Verifica il link o contatta il supporto.')
     }
   } else if (source === 'enotempo') {
@@ -122,6 +123,8 @@ export default async function handler(req, res) {
       tokenHash,
       affiliationId: affiliation.id,
       expiresAt,
+      source,
+      returnUrl: validatedReturnUrl,
       requestIp,
       userAgent,
     },
@@ -130,9 +133,9 @@ export default async function handler(req, res) {
   const verifyPath = '/api/socio/login/verify'
   const verifyUrl = new URL(verifyPath, BASE_URL)
   verifyUrl.searchParams.set('token', rawToken)
-  verifyUrl.searchParams.set('source', source)
-  if (safeReturnUrl) {
-    verifyUrl.searchParams.set('returnUrl', safeReturnUrl)
+
+  if (process.env.NODE_ENV !== 'test') {
+    logger.info('[Socio Login Request]', { src: source, hasReturnUrl: !!validatedReturnUrl, tokenCreated: true })
   }
 
   if (RESEND_API_KEY && SENDER_EMAIL) {
@@ -157,7 +160,7 @@ export default async function handler(req, res) {
         text: `Clicca per accedere (valido ${TOKEN_EXPIRY_MINUTES} minuti):\n${verifyUrl.toString()}\n\nSe non hai richiesto tu questo link, ignora questa email.\n— Il team FENAM`,
       })
     } catch (err) {
-      logger.error('[Socio Login Request] Invio email fallito', err?.message || err)
+      logger.error('[Socio Login Request] Invio email fallito', { errMsg: err?.message || 'unknown' })
       return sendError(res, 503, 'Service unavailable', 'Impossibile inviare l’email. Riprova più tardi.')
     }
   } else {
